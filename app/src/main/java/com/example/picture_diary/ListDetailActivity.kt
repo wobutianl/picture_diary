@@ -227,16 +227,15 @@ class ListDetailActivity : AppCompatActivity() {
                 true
             }
             R.id.action_settings -> {
-                // 显示设置对话框
-                val builder = android.app.AlertDialog.Builder(this)
-                builder.setTitle("设置")
-                builder.setItems(arrayOf("导出为PDF")) { _, which ->
-                    when (which) {
-                        0 -> generatePdf()
-                    }
+                // 显示确认对话框
+                val confirmBuilder = android.app.AlertDialog.Builder(this)
+                confirmBuilder.setTitle("确认导出")
+                confirmBuilder.setMessage("确定要导出当前列表的所有照片和信息为PDF文件吗？")
+                confirmBuilder.setPositiveButton("确定") { _, _ ->
+                    generatePdf()
                 }
-                builder.setNegativeButton("取消", null)
-                builder.show()
+                confirmBuilder.setNegativeButton("取消", null)
+                confirmBuilder.show()
                 true
             }
             else -> super.onOptionsItemSelected(item)

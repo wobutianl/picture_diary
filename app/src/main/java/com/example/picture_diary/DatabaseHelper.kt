@@ -138,6 +138,21 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME
         return photos
     }
 
+    // 获取指定 List 的所有 Photo 的时间信息（用于日历视图）
+    fun getPhotoTimesByListId(listId: Long): List<String> {
+        val db = readableDatabase
+        val times = mutableListOf<String>()
+        val cursor = db.rawQuery("SELECT $COLUMN_PHOTO_TIME FROM $TABLE_PHOTO WHERE $COLUMN_PHOTO_LIST_ID = ?", arrayOf(listId.toString()))
+        if (cursor.moveToFirst()) {
+            do {
+                val time = cursor.getString(0)
+                times.add(time)
+            } while (cursor.moveToNext())
+        }
+        cursor.close()
+        return times
+    }
+
     // 数据类：PhotoData
     data class PhotoData(val id: Long, val image: Bitmap, val time: String, val location: String, val note: String)
 }

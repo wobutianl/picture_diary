@@ -23,16 +23,48 @@
         android:orientation="vertical"
         android:padding="10dp">
 
-        <!-- 月份标题 -->
-        <TextView
-            android:id="@+id/monthTitle"
+        <!-- 月份标题和切换按钮 -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="2026年3月"
-            android:textSize="20sp"
-            android:textStyle="bold"
+            android:orientation="horizontal"
             android:gravity="center"
-            android:layout_marginBottom="20dp" />
+            android:layout_marginBottom="20dp">
+
+            <Button
+                android:id="@+id/btnPrevYear"
+                android:layout_width="60dp"
+                android:layout_height="40dp"
+                android:text="年" />
+
+            <Button
+                android:id="@+id/btnPrevMonth"
+                android:layout_width="60dp"
+                android:layout_height="40dp"
+                android:text="月" />
+
+            <TextView
+                android:id="@+id/monthTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="2026年3月"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:layout_marginHorizontal="20dp" />
+
+            <Button
+                android:id="@+id/btnNextMonth"
+                android:layout_width="60dp"
+                android:layout_height="40dp"
+                android:text="月" />
+
+            <Button
+                android:id="@+id/btnNextYear"
+                android:layout_width="60dp"
+                android:layout_height="40dp"
+                android:text="年" />
+
+        </LinearLayout>
 
         <!-- 星期标题 -->
         <LinearLayout

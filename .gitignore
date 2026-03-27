@@ -1,0 +1,104 @@
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# ====================
+# OS 系统文件
+# ====================
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# ====================
+# Gradle 构建系统
+# ====================
+.gradle/
+.gradle
+build/
+*/build/
+/*/build/
+/*/*/build/
+gradle-app.setting
+
+# ====================
+# Kotlin
+# ====================
+.kotlin/
+
+# ====================
+# 本地配置（SDK 路径等，每人不同）
+# ====================
+local.properties
+
+# ====================
+# Android Studio / IntelliJ IDEA
+# ====================
+*.iml
+*.ipr
+*.iws
+.idea/
+.idea/workspace.xml
+.idea/libraries
+.idea/modules.xml
+.idea/gradle.xml
+.navigation/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# ====================
+# 构建产物
+# ====================
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+output-metadata.json
+bin/
+gen/
+out/
+release/
+
+# ====================
+# 签名文件（敏感信息，绝对不能提交）
+# ====================
+*.jks
+*.keystore
+keystore.properties
+signing.properties
+.signing/
+
+# ====================
+# 性能分析文件
+# ====================
+*.hprof
+*.log
+
+# ====================
+# ProGuard（Eclipse 遗留）
+# ====================
+proguard/
+
+# ====================
+# NDK
+# ====================
+obj/
+
+# ====================
+# Google Services（根据策略决定是否忽略）
+# ====================
+# google-services.json

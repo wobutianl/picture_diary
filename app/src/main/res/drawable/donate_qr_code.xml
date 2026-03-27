@@ -1,0 +1,39 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="250dp"
+    android:height="250dp"
+    android:viewportWidth="250"
+    android:viewportHeight="250">
+
+    <!-- 白色背景 + 黑色边框 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:strokeColor="#000000"
+        android:strokeWidth="2"
+        android:pathData="M0,0 L250,0 L250,250 L0,250 Z" />
+
+    <!-- 左上角定位方块（模拟二维码样式） -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M40,40 L70,40 L70,70 L40,70 Z M45,45 L65,45 L65,65 L45,65 Z" />
+
+    <!-- 右上角定位方块 -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M180,40 L210,40 L210,70 L180,70 Z M185,45 L205,45 L205,65 L185,65 Z" />
+
+    <!-- 左下角定位方块 -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M40,180 L70,180 L70,210 L40,210 Z M45,185 L65,185 L65,205 L45,205 Z" />
+
+    <!-- 中央点阵（模拟二维码数据区） -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M100,100 L105,100 L105,105 L100,105 Z
+                         M115,115 L120,115 L120,120 L115,120 Z
+                         M130,130 L135,130 L135,135 L130,135 Z
+                         M145,145 L150,145 L150,150 L145,150 Z
+                         M100,160 L105,160 L105,165 L100,165 Z
+                         M160,100 L165,100 L165,105 L160,105 Z" />
+
+</vector>

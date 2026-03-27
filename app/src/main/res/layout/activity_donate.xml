@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <com.google.android.material.appbar.AppBarLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <androidx.appcompat.widget.Toolbar
+            android:id="@+id/toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            android:background="?attr/colorPrimary" />
+
+    </com.google.android.material.appbar.AppBarLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:padding="20dp"
+        android:gravity="center">
+
+        <TextView
+            android:id="@+id/donate_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="打赏支持"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="30dp" />
+
+    <TextView
+        android:id="@+id/donate_message"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="感谢您使用Picture Diary应用！\n\n开发和维护这个应用需要大量的时间和精力，包括：\n\n• 功能开发和测试\n• 界面设计和优化\n•  bug修复和性能提升\n• 服务器和存储费用\n\n如果您觉得这个应用对您有帮助，欢迎通过以下方式打赏支持，您的支持将帮助我们持续改进和更新应用。\n\n谢谢！"
+        android:textSize="16sp"
+        android:lineSpacingExtra="4sp"
+        android:layout_marginBottom="30dp" />
+
+    <ImageView
+        android:id="@+id/qr_code"
+        android:layout_width="250dp"
+        android:layout_height="250dp"
+        android:src="@drawable/donate_qr_code"
+        android:scaleType="centerInside"
+        android:layout_marginBottom="30dp" />
+
+    <TextView
+        android:id="@+id/donate_hint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="提示：您可以将自己的二维码图片命名为donate_qr_code.png，放到res/drawable目录下替换默认二维码。"
+        android:textSize="14sp"
+        android:textColor="@android:color/secondary_text_dark"
+        android:layout_marginBottom="20dp" />
+
+
+    <Button
+        android:id="@+id/btn_close"
+        android:layout_width="200dp"
+        android:layout_height="wrap_content"
+        android:text="关闭"
+        android:backgroundTint="?attr/colorPrimary"
+        android:textColor="@android:color/white"
+        android:textSize="16sp" />
+
+    </LinearLayout>
+</LinearLayout>

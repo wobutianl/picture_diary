@@ -84,7 +84,7 @@ class ListDetailActivity : AppCompatActivity() {
             builder.setView(dialogView)
             
             // 设置确定按钮（保存注释）
-            builder.setPositiveButton("Save") { dialog, which ->
+            builder.setPositiveButton("保存") { dialog, which ->
                 val note = noteEditText.text.toString().trim()
                 // 更新数据库
                 dbHelper.updatePhoto(selectedPhoto.id, note)
@@ -94,12 +94,12 @@ class ListDetailActivity : AppCompatActivity() {
             }
             
             // 设置删除按钮
-            builder.setNeutralButton("Delete") { dialog, which ->
+            builder.setNeutralButton("删除") { dialog, which ->
                 // 显示确认对话框
                 val confirmBuilder = android.app.AlertDialog.Builder(this)
-                confirmBuilder.setTitle("Confirm Delete")
-                confirmBuilder.setMessage("Are you sure you want to delete this photo?")
-                confirmBuilder.setPositiveButton("Yes") { _, _ ->
+                confirmBuilder.setTitle("确认删除")
+                confirmBuilder.setMessage("确定要删除这张照片吗？")
+                confirmBuilder.setPositiveButton("确定") { _, _ ->
                     // 从数据库中删除
                     dbHelper.deletePhoto(selectedPhoto.id)
                     // 从列表中删除
@@ -112,7 +112,7 @@ class ListDetailActivity : AppCompatActivity() {
             }
             
             // 设置取消按钮
-            builder.setNegativeButton("Cancel", null)
+            builder.setNegativeButton("取消", null)
             
             // 显示对话框
             val dialog = builder.show()
@@ -124,6 +124,44 @@ class ListDetailActivity : AppCompatActivity() {
                 val height = (displayMetrics.heightPixels * 0.8).toInt()
                 window.setLayout(width, height)
             }
+        }
+
+        // 添加照片长按事件监听器，实现功能列表
+        binding.photoGrid.setOnItemLongClickListener { parent, view, position, id ->
+            val selectedPhoto = photoList[position]
+            
+            // 显示功能列表对话框
+            val builder = android.app.AlertDialog.Builder(this)
+            builder.setTitle("照片操作")
+            builder.setItems(arrayOf("保存到本地", "分享照片", "查看详情")) { _, which ->
+                when (which) {
+                    0 -> {
+                        // 保存到本地
+                        val confirmBuilder = android.app.AlertDialog.Builder(this)
+                        confirmBuilder.setTitle("保存照片")
+                        confirmBuilder.setMessage("确定要将照片保存到本地吗？")
+                        confirmBuilder.setPositiveButton("确定") { _, _ ->
+                            // 保存照片到本地
+                            savePhotoToLocal(selectedPhoto.image)
+                        }
+                        confirmBuilder.setNegativeButton("取消", null)
+                        confirmBuilder.show()
+                    }
+                    1 -> {
+                        // 分享照片
+                        sharePhoto(selectedPhoto.image)
+                    }
+                    2 -> {
+                        // 查看详情（跳转到详情对话框）
+                        // 这里可以直接调用点击事件的逻辑
+                        binding.photoGrid.performItemClick(view, position, id)
+                    }
+                }
+            }
+            builder.setNegativeButton("取消", null)
+            builder.show()
+            
+            true
         }
 
         // 设置拍摄按钮点击事件
@@ -302,9 +340,16 @@ class ListDetailActivity : AppCompatActivity() {
         }
         
         try {
-            // 创建 PDF 文档
             val pdfPath = getPdfFilePath()
             android.util.Log.d("ListDetailActivity", "Generating PDF at: $pdfPath")
+            
+            if (photoList.isEmpty()) {
+                android.util.Log.d("ListDetailActivity", "photoList is empty")
+                Toast.makeText(this, "No photos to export", Toast.LENGTH_SHORT).show()
+                return
+            }
+            
+            // 创建 PDF 文档
             val pdfWriter = PdfWriter(pdfPath)
             val pdfDocument = PdfDocument(pdfWriter)
             val document = Document(pdfDocument)
@@ -352,90 +397,151 @@ class ListDetailActivity : AppCompatActivity() {
                 }
             }
             
-            // 添加标题
-            val title = intent.getStringExtra("LIST_NAME") ?: "Unknown List"
-            android.util.Log.d("ListDetailActivity", "Adding title: $title")
-            val titlePara = Paragraph(title)
-                .setFontSize(24f)
-                .setBold()
-                .setTextAlignment(TextAlignment.CENTER)
-                .setMarginBottom(20f)
-            if (font != null) {
-                titlePara.setFont(font)
-            }
-            document.add(titlePara)
-            android.util.Log.d("ListDetailActivity", "Added title")
+            val listTitle = intent.getStringExtra("LIST_NAME") ?: "Unknown List"
             
-            // 添加照片和信息
-            android.util.Log.d("ListDetailActivity", "photoList size: ${photoList.size}")
-            if (photoList.isEmpty()) {
-                android.util.Log.d("ListDetailActivity", "photoList is empty")
-                val noPhotosPara = Paragraph("No photos found")
-                    .setMarginTop(20f)
-                    .setTextAlignment(TextAlignment.CENTER)
-                document.add(noPhotosPara)
-                android.util.Log.d("ListDetailActivity", "Added no photos message")
-            } else {
-                for ((index, photoData) in photoList.withIndex()) {
-                    android.util.Log.d("ListDetailActivity", "Processing photo $index: ${photoData.time}, ${photoData.location}, ${photoData.note}")
-                    try {
-                        // 添加照片
-                        android.util.Log.d("ListDetailActivity", "Adding photo $index")
-                        val imageData = ImageDataFactory.create(bitmapToByteArray(photoData.image))
-                        val image = Image(imageData)
-                            .setWidth(300f)
-                            .setAutoScaleHeight(true)
-                            .setMarginBottom(10f) // 添加底部边距
-                        document.add(image)
-                        android.util.Log.d("ListDetailActivity", "Added photo $index")
-                        
-                        // 添加信息
-                        android.util.Log.d("ListDetailActivity", "Adding info for photo $index")
-                        
-                        val timePara = Paragraph("时间：${photoData.time}")
-                            .setFontSize(12f)
-                            .setMarginBottom(5f)
-                        if (font != null) {
-                            timePara.setFont(font)
+            // 按日期分组照片
+            val photosByDate = mutableMapOf<String, MutableList<DatabaseHelper.PhotoData>>()
+            
+            for (photoData in photoList) {
+                // 提取日期部分（去掉时间）
+                val date = photoData.time.split(" ")[0]
+                if (!photosByDate.containsKey(date)) {
+                    photosByDate[date] = mutableListOf()
+                }
+                photosByDate[date]?.add(photoData)
+            }
+            
+            android.util.Log.d("ListDetailActivity", "Photos grouped by date: ${photosByDate.size} groups")
+            
+            // 处理每个日期组
+            for ((date, photos) in photosByDate) {
+                android.util.Log.d("ListDetailActivity", "Processing date: $date, photos: ${photos.size}")
+                
+                // 为每个日期组创建一个新页面
+                pdfDocument.addNewPage()
+                
+                // 计算页面布局
+                val pageSize = pdfDocument.defaultPageSize
+                val margin = 36f
+                val availableWidth = pageSize.width - (2 * margin)
+                val availableHeight = pageSize.height - (2 * margin)
+                
+                // 设置文档边距
+                document.setMargins(margin, margin, margin, margin)
+                
+                // 添加日期标题
+                val dateTitle = Paragraph(date)
+                    .setFontSize(16f)
+                    .setBold()
+                    .setMarginBottom(20f)
+                if (font != null) {
+                    dateTitle.setFont(font)
+                }
+                document.add(dateTitle)
+                
+                // 计算每张照片的高度
+                val baseFontSize = 12f
+                val lineHeight = baseFontSize * 1.5f
+                val charsPerLine = (availableWidth / (baseFontSize * 0.5)).toInt()
+                
+                // 每张照片的文字高度估算
+                val estimatedTextHeight = 100f // 估算文字高度
+                val estimatedPhotoHeight = 200f // 估算每张照片总高度
+                
+                // 计算每页可容纳的照片数量
+                val maxPhotosPerPage = (availableHeight / estimatedPhotoHeight).toInt()
+                
+                // 分批处理照片
+                val photoBatches = photos.chunked(maxPhotosPerPage)
+                
+                for ((batchIndex, batch) in photoBatches.withIndex()) {
+                    if (batchIndex > 0) {
+                        pdfDocument.addNewPage()
+                        document.setMargins(margin, margin, margin, margin)
+                        document.add(dateTitle)
+                    }
+                    
+                    // 处理当前批次的照片
+                    for ((index, photoData) in batch.withIndex()) {
+                        try {
+                            // 准备文字内容
+                            val timeText = "时间：${photoData.time}"
+                            val locationText = "地址：${if (photoData.location.isNotEmpty()) photoData.location else "未知"}"
+                            val noteText = "信息：${if (photoData.note.isNotEmpty()) photoData.note else "无"}"
+                            
+                            // 计算文字高度
+                            val timeLines = (timeText.length + charsPerLine - 1) / charsPerLine
+                            val locationLines = (locationText.length + charsPerLine - 1) / charsPerLine
+                            val noteLines = (noteText.length + charsPerLine - 1) / charsPerLine
+                            val totalTextHeight = (timeLines + locationLines + noteLines) * lineHeight + 30f
+                            
+                            // 计算图片可用高度
+                            val imageAvailableHeight = availableHeight - totalTextHeight - 50f // 预留空间
+                            val minImageHeight = 100f
+                            val safeImageHeight = if (imageAvailableHeight > minImageHeight) imageAvailableHeight else minImageHeight
+                            
+                            // 调整图片大小
+                            val imageData = ImageDataFactory.create(bitmapToByteArray(photoData.image))
+                            val image = Image(imageData)
+                            
+                            // 计算图片宽度，保持原始比例
+                            val imageWidth = availableWidth
+                            val imageHeight = (imageWidth * imageData.height) / imageData.width
+                            
+                            var finalImageHeight = imageHeight
+                            var finalImageWidth = imageWidth
+                            
+                            // 确保图片高度不超过可用高度
+                            if (finalImageHeight > safeImageHeight) {
+                                finalImageHeight = safeImageHeight
+                                finalImageWidth = (finalImageHeight * imageData.width) / imageData.height
+                            }
+                            
+                            // 确保图片宽度不超过可用宽度
+                            if (finalImageWidth > availableWidth) {
+                                finalImageWidth = availableWidth
+                                finalImageHeight = (finalImageWidth * imageData.height) / imageData.width
+                            }
+                            
+                            // 添加照片
+                            image.setWidth(finalImageWidth)
+                            image.setHeight(finalImageHeight)
+                            image.setMarginBottom(15f)
+                            document.add(image)
+                            
+                            // 添加文字信息
+                            val timePara = Paragraph(timeText)
+                                .setFontSize(baseFontSize)
+                                .setMarginBottom(8f)
+                            if (font != null) timePara.setFont(font)
+                            document.add(timePara)
+                            
+                            val locationPara = Paragraph(locationText)
+                                .setFontSize(baseFontSize)
+                                .setMarginBottom(8f)
+                            if (font != null) locationPara.setFont(font)
+                            document.add(locationPara)
+                            
+                            val notePara = Paragraph(noteText)
+                                .setFontSize(baseFontSize)
+                                .setMarginBottom(20f) // 增加底部边距，区分不同照片
+                            if (font != null) notePara.setFont(font)
+                            document.add(notePara)
+                            
+                            android.util.Log.d("ListDetailActivity", "Added photo $index for date $date")
+                        } catch (e: Exception) {
+                            android.util.Log.e("ListDetailActivity", "Error adding photo $index for date $date", e)
+                            val errorPara = Paragraph("Error adding photo: ${e.message}")
+                                .setMarginTop(10f)
+                                .setMarginBottom(20f)
+                            document.add(errorPara)
                         }
-                        document.add(timePara)
-                        android.util.Log.d("ListDetailActivity", "Added time info: ${photoData.time}")
-                        
-                        val locationText = if (photoData.location.isNotEmpty()) photoData.location else "未知"
-                        val locationPara = Paragraph("地址：$locationText")
-                            .setFontSize(12f)
-                            .setMarginBottom(5f)
-                        if (font != null) {
-                            locationPara.setFont(font)
-                        }
-                        document.add(locationPara)
-                        android.util.Log.d("ListDetailActivity", "Added location info: $locationText")
-                        
-                        val noteText = if (photoData.note.isNotEmpty()) photoData.note else "无"
-                        val notePara = Paragraph("信息：$noteText")
-                            .setFontSize(12f)
-                            .setMarginBottom(20f)
-                        if (font != null) {
-                            notePara.setFont(font)
-                        }
-                        document.add(notePara)
-                        android.util.Log.d("ListDetailActivity", "Added note info: $noteText")
-                        
-                        android.util.Log.d("ListDetailActivity", "Finished processing photo $index")
-                    } catch (e: Exception) {
-                        android.util.Log.e("ListDetailActivity", "Error adding photo $index", e)
-                        val errorPara = Paragraph("Error adding photo: ${e.message}")
-                            .setMarginTop(10f)
-                            .setMarginBottom(20f)
-                        document.add(errorPara)
                     }
                 }
             }
             
             // 关闭文档
-            android.util.Log.d("ListDetailActivity", "Closing document")
             document.close()
-            android.util.Log.d("ListDetailActivity", "Document closed")
             android.util.Log.d("ListDetailActivity", "PDF generated successfully at: $pdfPath")
             
             // 显示成功提示
@@ -525,9 +631,10 @@ class ListDetailActivity : AppCompatActivity() {
         when (requestCode) {
             REQUEST_STORAGE_PERMISSION -> {
                 if (grantResults.isNotEmpty() && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                    generatePdf()
+                    // 权限已授予，可以继续操作
+                    Toast.makeText(this, "存储权限已授予", Toast.LENGTH_SHORT).show()
                 } else {
-                    Toast.makeText(this, "Storage permission is required to generate PDF", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "需要存储权限才能保存照片或生成PDF", Toast.LENGTH_SHORT).show()
                 }
             }
             REQUEST_LOCATION_PERMISSION -> {
@@ -537,6 +644,80 @@ class ListDetailActivity : AppCompatActivity() {
                     Toast.makeText(this, "Location permission is required to get location", Toast.LENGTH_SHORT).show()
                 }
             }
+        }
+    }
+
+    // 保存照片到本地
+    private fun savePhotoToLocal(bitmap: android.graphics.Bitmap) {
+        // 检查存储权限
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            if (checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(android.Manifest.permission.WRITE_EXTERNAL_STORAGE), REQUEST_STORAGE_PERMISSION)
+                return
+            }
+        }
+
+        try {
+            // 创建保存目录
+            val directory = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_PICTURES)
+            val pictureDiaryDir = java.io.File(directory, "PictureDiary")
+            if (!pictureDiaryDir.exists()) {
+                pictureDiaryDir.mkdirs()
+            }
+
+            // 创建文件名
+            val timeStamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss").format(java.util.Date())
+            val fileName = "IMG_${timeStamp}.jpg"
+            val file = java.io.File(pictureDiaryDir, fileName)
+
+            // 保存图片
+            val fos = java.io.FileOutputStream(file)
+            bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 100, fos)
+            fos.flush()
+            fos.close()
+
+            // 添加到媒体库
+            val contentValues = android.content.ContentValues().apply {
+                put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, fileName)
+                put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+                put(android.provider.MediaStore.Images.Media.DATA, file.absolutePath)
+            }
+            contentResolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+
+            Toast.makeText(this, "照片已保存到: ${file.absolutePath}", Toast.LENGTH_LONG).show()
+        } catch (e: Exception) {
+            android.util.Log.e("ListDetailActivity", "Error saving photo", e)
+            Toast.makeText(this, "保存照片失败: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // 分享照片
+    private fun sharePhoto(bitmap: android.graphics.Bitmap) {
+        try {
+            // 创建临时文件
+            val cacheDir = externalCacheDir
+            val file = java.io.File(cacheDir, "shared_photo.jpg")
+            val fos = java.io.FileOutputStream(file)
+            bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 100, fos)
+            fos.flush()
+            fos.close()
+
+            // 创建分享意图
+            val uri = androidx.core.content.FileProvider.getUriForFile(
+                this,
+                "com.example.picture_diary.fileprovider",
+                file
+            )
+            val intent = Intent(Intent.ACTION_SEND)
+            intent.type = "image/jpeg"
+            intent.putExtra(Intent.EXTRA_STREAM, uri)
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+
+            // 启动分享对话框
+            startActivity(Intent.createChooser(intent, "分享照片"))
+        } catch (e: Exception) {
+            android.util.Log.e("ListDetailActivity", "Error sharing photo", e)
+            Toast.makeText(this, "分享照片失败: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 }

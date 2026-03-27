@@ -52,7 +52,7 @@ class MainActivity : AppCompatActivity() {
             
             // 创建对话框构建器
             val builder = android.app.AlertDialog.Builder(this)
-            builder.setTitle("Edit List Name")
+            builder.setTitle("编辑列表名称")
             
             // 添加输入框，默认显示当前名称
             val input = android.widget.EditText(this)
@@ -60,7 +60,7 @@ class MainActivity : AppCompatActivity() {
             builder.setView(input)
             
             // 设置确定按钮
-            builder.setPositiveButton("Save") { dialog, which ->
+            builder.setPositiveButton("保存") { dialog, which ->
                 val newName = input.text.toString().trim()
                 if (newName.isNotEmpty()) {
                     // 更新数据库
@@ -68,14 +68,14 @@ class MainActivity : AppCompatActivity() {
                     // 更新列表
                     listItems[position] = newName
                     listAdapter.notifyDataSetChanged()
-                    Toast.makeText(this, "Updated: $newName", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "已更新: $newName", Toast.LENGTH_SHORT).show()
                 } else {
-                    Toast.makeText(this, "Please enter a list name", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "请输入列表名称", Toast.LENGTH_SHORT).show()
                 }
             }
             
             // 设置取消按钮
-            builder.setNegativeButton("Cancel", null)
+            builder.setNegativeButton("取消", null)
             
             // 显示对话框
             builder.show()
@@ -85,15 +85,15 @@ class MainActivity : AppCompatActivity() {
         binding.fab.setOnClickListener { view ->
             // 创建对话框构建器
             val builder = android.app.AlertDialog.Builder(this)
-            builder.setTitle("Create New List")
+            builder.setTitle("创建新列表")
             
             // 添加输入框
             val input = android.widget.EditText(this)
-            input.hint = "Enter list name"
+            input.hint = "请输入列表名称"
             builder.setView(input)
             
             // 设置确定按钮
-            builder.setPositiveButton("Create") { dialog, which ->
+            builder.setPositiveButton("创建") { dialog, which ->
                 val listName = input.text.toString().trim()
                 if (listName.isNotEmpty()) {
                     // 插入数据库
@@ -102,14 +102,14 @@ class MainActivity : AppCompatActivity() {
                     listItems.add(listName)
                     listIds.add(listId)
                     listAdapter.notifyDataSetChanged()
-                    Toast.makeText(this, "Added: $listName", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "已添加: $listName", Toast.LENGTH_SHORT).show()
                 } else {
-                    Toast.makeText(this, "Please enter a list name", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "请输入列表名称", Toast.LENGTH_SHORT).show()
                 }
             }
             
             // 设置取消按钮
-            builder.setNegativeButton("Cancel", null)
+            builder.setNegativeButton("取消", null)
             
             // 显示对话框
             builder.show()

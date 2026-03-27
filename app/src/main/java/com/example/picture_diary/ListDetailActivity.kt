@@ -713,8 +713,14 @@ class ListDetailActivity : AppCompatActivity() {
             intent.putExtra(Intent.EXTRA_STREAM, uri)
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
 
-            // 启动分享对话框
-            startActivity(Intent.createChooser(intent, "分享照片"))
+            // 启动分享对话框，包含微信选项
+            val chooser = Intent.createChooser(intent, "分享照片")
+            // 检查是否有应用可以处理这个意图
+            if (intent.resolveActivity(packageManager) != null) {
+                startActivity(chooser)
+            } else {
+                Toast.makeText(this, "没有可用的分享应用", Toast.LENGTH_SHORT).show()
+            }
         } catch (e: Exception) {
             android.util.Log.e("ListDetailActivity", "Error sharing photo", e)
             Toast.makeText(this, "分享照片失败: ${e.message}", Toast.LENGTH_SHORT).show()

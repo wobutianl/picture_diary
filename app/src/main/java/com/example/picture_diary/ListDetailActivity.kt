@@ -220,10 +220,12 @@ class ListDetailActivity : AppCompatActivity() {
         return when (item.itemId) {
             R.id.action_calendar -> {
                 // 切换到日历页面
-                val intent = android.content.Intent(this, CalendarActivity::class.java)
-                intent.putExtra("LIST_ID", listId)
-                intent.putExtra("LIST_NAME", title)
-                startActivity(intent)
+                android.os.Handler().post {
+                    val intent = android.content.Intent(this, CalendarActivity::class.java)
+                    intent.putExtra("LIST_ID", listId)
+                    intent.putExtra("LIST_NAME", title)
+                    startActivity(intent)
+                }
                 true
             }
             R.id.action_settings -> {

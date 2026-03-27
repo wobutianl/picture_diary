@@ -41,9 +41,6 @@ class CalendarActivity : AppCompatActivity() {
         setSupportActionBar(binding.toolbar)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
 
-        // 初始化数据库帮助类
-        dbHelper = DatabaseHelper(this)
-
         // 设置月份标题
         updateMonthTitle()
 
@@ -64,8 +61,13 @@ class CalendarActivity : AppCompatActivity() {
             nextYear()
         }
 
-        // 初始化RecyclerView
-        updateCalendar()
+        // 延迟初始化数据库和RecyclerView，提高启动速度
+        android.os.Handler().post {
+            // 初始化数据库帮助类
+            dbHelper = DatabaseHelper(this)
+            // 初始化RecyclerView
+            updateCalendar()
+        }
     }
 
     override fun onSupportNavigateUp(): Boolean {
@@ -116,18 +118,34 @@ class CalendarActivity : AppCompatActivity() {
         updateCalendar()
     }
 
+    // 日历适配器实例
+    private var calendarAdapter: CalendarAdapter? = null
+
     // 更新日历显示
     private fun updateCalendar() {
-        val calendarAdapter = CalendarAdapter()
-        binding.calendarRecyclerView.layoutManager = GridLayoutManager(this, 7) // 7列日历
+        // 只创建一次布局管理器
+        if (binding.calendarRecyclerView.layoutManager == null) {
+            binding.calendarRecyclerView.layoutManager = GridLayoutManager(this, 7) // 7列日历
+        }
+        
+        // 创建新的适配器并设置
+        calendarAdapter = CalendarAdapter()
         binding.calendarRecyclerView.adapter = calendarAdapter
     }
+
+
 
     // 日历适配器
     inner class CalendarAdapter : RecyclerView.Adapter<CalendarAdapter.CalendarViewHolder>() {
 
-        private val calendarData: List<Any> = generateCalendarData()
-        private val photoTimes: List<String> = dbHelper.getPhotoTimesByListId(listId)
+        private val calendarData: List<Any>
+        private val photosByDate: Map<String, List<DatabaseHelper.PhotoData>>
+
+        // 构造函数中生成日历数据和预加载照片
+        init {
+            calendarData = generateCalendarData()
+            photosByDate = loadPhotosByDate()
+        }
 
         // 生成日历数据
         private fun generateCalendarData(): List<Any> {
@@ -154,6 +172,15 @@ class CalendarActivity : AppCompatActivity() {
             return data
         }
 
+        // 加载所有照片并按日期分组
+        private fun loadPhotosByDate(): Map<String, List<DatabaseHelper.PhotoData>> {
+            val allPhotos = dbHelper.getPhotosByListId(listId)
+            return allPhotos.groupBy { 
+                // 提取日期部分（格式：yyyy/MM/dd）
+                it.time.substring(0, 10)
+            }
+        }
+
         override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): CalendarViewHolder {
             val view = layoutInflater.inflate(R.layout.item_calendar_day, parent, false)
             return CalendarViewHolder(view)
@@ -168,7 +195,8 @@ class CalendarActivity : AppCompatActivity() {
                 holder.dayTextView.visibility = android.view.View.VISIBLE
                 
                 // 检查当天是否有照片
-                if (hasPhoto(item)) {
+                val hasPhoto = checkHasPhoto(item)
+                if (hasPhoto) {
                     // 有照片，设置蓝色背景
                     holder.itemView.setBackgroundColor(android.graphics.Color.parseColor("#E3F2FD"))
                     holder.photoIndicator.visibility = android.view.View.VISIBLE
@@ -182,11 +210,59 @@ class CalendarActivity : AppCompatActivity() {
                     // 点击日期时，可以显示当天的照片
                     val builder = android.app.AlertDialog.Builder(this@CalendarActivity)
                     builder.setTitle("${listName} - ${currentYear}年${currentMonth + 1}月$item 日")
-                    if (hasPhoto(item)) {
-                        builder.setMessage("当天有照片")
+                    
+                    if (hasPhoto) {
+                        // 从内存中获取当天的照片
+                        val monthStr = String.format("%02d", currentMonth + 1)
+                        val dayStr = String.format("%02d", item)
+                        val dateStr = "${currentYear}/$monthStr/$dayStr"
+                        val photos = getPhotosByDate(dateStr)
+                        
+                        if (photos.isNotEmpty()) {
+                            // 显示照片和信息的对话框
+                            val dialogView = layoutInflater.inflate(R.layout.dialog_photo_gallery, null)
+                            val recyclerView = dialogView.findViewById<RecyclerView>(R.id.photoRecyclerView)
+                            
+                            // 创建适配器显示照片
+                            val photoAdapter = object : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+                                override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+                                    val view = layoutInflater.inflate(R.layout.item_photo_gallery, parent, false)
+                                    return object : RecyclerView.ViewHolder(view) {
+                                        val imageView: ImageView = view.findViewById(R.id.photoImageView)
+                                        val timeTextView: TextView = view.findViewById(R.id.timeTextView)
+                                        val locationTextView: TextView = view.findViewById(R.id.locationTextView)
+                                        val noteTextView: TextView = view.findViewById(R.id.noteTextView)
+                                    }
+                                }
+                                
+                                override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+                                    val photo = photos[position]
+                                    val viewHolder = holder as RecyclerView.ViewHolder
+                                    val imageView = viewHolder.itemView.findViewById<ImageView>(R.id.photoImageView)
+                                    val timeTextView = viewHolder.itemView.findViewById<TextView>(R.id.timeTextView)
+                                    val locationTextView = viewHolder.itemView.findViewById<TextView>(R.id.locationTextView)
+                                    val noteTextView = viewHolder.itemView.findViewById<TextView>(R.id.noteTextView)
+                                    
+                                    imageView.setImageBitmap(photo.image)
+                                    timeTextView.text = photo.time
+                                    locationTextView.text = photo.location
+                                    noteTextView.text = photo.note
+                                }
+                                
+                                override fun getItemCount(): Int = photos.size
+                            }
+                            
+                            recyclerView.layoutManager = GridLayoutManager(this@CalendarActivity, 1)
+                            recyclerView.adapter = photoAdapter
+                            
+                            builder.setView(dialogView)
+                        } else {
+                            builder.setMessage("当天没有照片")
+                        }
                     } else {
                         builder.setMessage("当天没有照片")
                     }
+                    
                     builder.setPositiveButton("确定", null)
                     builder.show()
                 }
@@ -199,13 +275,16 @@ class CalendarActivity : AppCompatActivity() {
         }
 
         // 检查指定日期是否有照片
-        private fun hasPhoto(day: Int): Boolean {
-            // 构建日期字符串，格式与数据库中存储的一致（使用两位数的月份和日期）
+        private fun checkHasPhoto(day: Int): Boolean {
             val monthStr = String.format("%02d", currentMonth + 1)
             val dayStr = String.format("%02d", day)
             val dateStr = "${currentYear}/$monthStr/$dayStr"
-            // 检查是否有对应日期的照片
-            return photoTimes.any { it.startsWith(dateStr) }
+            return photosByDate.containsKey(dateStr)
+        }
+
+        // 从内存中获取指定日期的照片
+        private fun getPhotosByDate(dateStr: String): List<DatabaseHelper.PhotoData> {
+            return photosByDate.getOrDefault(dateStr, emptyList())
         }
 
         override fun getItemCount(): Int = calendarData.size

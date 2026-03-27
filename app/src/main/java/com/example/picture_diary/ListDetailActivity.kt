@@ -115,7 +115,15 @@ class ListDetailActivity : AppCompatActivity() {
             builder.setNegativeButton("Cancel", null)
             
             // 显示对话框
-            builder.show()
+            val dialog = builder.show()
+            // 设置对话框大小，确保备注信息框能够完全显示
+            val window = dialog.window
+            if (window != null) {
+                val displayMetrics = resources.displayMetrics
+                val width = (displayMetrics.widthPixels * 0.9).toInt()
+                val height = (displayMetrics.heightPixels * 0.8).toInt()
+                window.setLayout(width, height)
+            }
         }
 
         // 设置拍摄按钮点击事件

@@ -3,45 +3,89 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:padding="16dp">
+    android:padding="20dp">
 
+    <!-- 照片预览 -->
     <ImageView
         android:id="@+id/photoImageView"
-        android:layout_width="200dp"
-        android:layout_height="200dp"
+        android:layout_width="240dp"
+        android:layout_height="240dp"
         android:scaleType="centerCrop"
+        android:background="@drawable/calendar_day_background"
+        android:layout_marginBottom="24dp"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <!-- 时间信息 -->
+    <TextView
+        android:id="@+id/timeLabel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="拍摄时间:" 
+        android:textSize="14sp"
+        android:textColor="@android:color/secondary_text_dark"
+        app:layout_constraintTop_toBottomOf="@+id/photoImageView"
         app:layout_constraintStart_toStartOf="parent" />
 
     <TextView
         android:id="@+id/timeTextView"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
+        android:layout_marginTop="4dp"
         android:textSize="16sp"
-        app:layout_constraintTop_toBottomOf="@+id/photoImageView"
+        android:textColor="@android:color/black"
+        app:layout_constraintTop_toBottomOf="@+id/timeLabel"
         app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <!-- 位置信息 -->
+    <TextView
+        android:id="@+id/locationLabel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="拍摄位置:" 
+        android:textSize="14sp"
+        android:textColor="@android:color/secondary_text_dark"
+        android:layout_marginTop="16dp"
+        app:layout_constraintTop_toBottomOf="@+id/timeTextView"
         app:layout_constraintStart_toStartOf="parent" />
 
     <TextView
         android:id="@+id/locationTextView"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="4dp"
         android:textSize="16sp"
-        app:layout_constraintTop_toBottomOf="@+id/timeTextView"
+        android:textColor="@android:color/black"
+        app:layout_constraintTop_toBottomOf="@+id/locationLabel"
         app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <!-- 备注信息 -->
+    <TextView
+        android:id="@+id/noteLabel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="备注信息:" 
+        android:textSize="14sp"
+        android:textColor="@android:color/secondary_text_dark"
+        android:layout_marginTop="16dp"
+        app:layout_constraintTop_toBottomOf="@+id/locationTextView"
         app:layout_constraintStart_toStartOf="parent" />
 
     <EditText
         android:id="@+id/noteEditText"
         android:layout_width="0dp"
-        android:layout_height="100dp"
-        android:layout_marginTop="16dp"
+        android:layout_height="120dp"
+        android:layout_marginTop="4dp"
         android:gravity="top"
         android:inputType="textMultiLine"
-        app:layout_constraintTop_toBottomOf="@+id/locationTextView"
+        android:background="@drawable/calendar_day_background"
+        android:padding="12dp"
+        android:hint="请输入备注信息"
+        android:textSize="16sp"
+        app:layout_constraintTop_toBottomOf="@+id/noteLabel"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent" />
 

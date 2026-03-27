@@ -19,7 +19,8 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:theme="@style/Theme.Picture_diary">
+            android:theme="@style/Theme.Picture_diary"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
@@ -29,19 +30,23 @@
         <activity
             android:name=".ListDetailActivity"
             android:exported="false"
-            android:theme="@style/Theme.Picture_diary" />
+            android:theme="@style/Theme.Picture_diary"
+            android:windowSoftInputMode="adjustResize" />
         <activity
             android:name=".DonateActivity"
             android:exported="false"
-            android:theme="@style/Theme.Picture_diary" />
+            android:theme="@style/Theme.Picture_diary"
+            android:windowSoftInputMode="adjustResize" />
         <activity
             android:name=".AboutActivity"
             android:exported="false"
-            android:theme="@style/Theme.Picture_diary" />
+            android:theme="@style/Theme.Picture_diary"
+            android:windowSoftInputMode="adjustResize" />
         <activity
             android:name=".CalendarActivity"
             android:exported="false"
-            android:theme="@style/Theme.Picture_diary" />
+            android:theme="@style/Theme.Picture_diary"
+            android:windowSoftInputMode="adjustResize" />
         
         <provider
             android:name="androidx.core.content.FileProvider"

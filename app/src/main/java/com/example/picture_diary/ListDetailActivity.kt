@@ -4,6 +4,8 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.os.Bundle
 import android.provider.MediaStore
+import android.view.GestureDetector
+import android.view.MotionEvent
 import android.widget.ArrayAdapter
 import android.widget.ImageView
 import android.widget.Toast
@@ -29,6 +31,7 @@ class ListDetailActivity : AppCompatActivity() {
     private lateinit var dbHelper: DatabaseHelper
     private var listId: Long = 0
     private var photoUri: android.net.Uri? = null
+    private lateinit var gestureDetector: GestureDetector
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -119,6 +122,8 @@ class ListDetailActivity : AppCompatActivity() {
         binding.captureButton.setOnClickListener {
             dispatchTakePictureIntent()
         }
+
+
     }
 
     private fun dispatchTakePictureIntent() {
@@ -213,16 +218,24 @@ class ListDetailActivity : AppCompatActivity() {
 
     override fun onOptionsItemSelected(item: android.view.MenuItem): Boolean {
         return when (item.itemId) {
+            R.id.action_calendar -> {
+                // 切换到日历页面
+                val intent = android.content.Intent(this, CalendarActivity::class.java)
+                intent.putExtra("LIST_ID", listId)
+                intent.putExtra("LIST_NAME", title)
+                startActivity(intent)
+                true
+            }
             R.id.action_settings -> {
                 // 显示设置对话框
                 val builder = android.app.AlertDialog.Builder(this)
-                builder.setTitle("Settings")
-                builder.setItems(arrayOf("Export as PDF")) { _, which ->
+                builder.setTitle("设置")
+                builder.setItems(arrayOf("导出为PDF")) { _, which ->
                     when (which) {
                         0 -> generatePdf()
                     }
                 }
-                builder.setNegativeButton("Cancel", null)
+                builder.setNegativeButton("取消", null)
                 builder.show()
                 true
             }

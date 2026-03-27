@@ -38,8 +38,11 @@
             android:name=".AboutActivity"
             android:exported="false"
             android:theme="@style/Theme.Picture_diary" />
-
-        <!-- 添加 FileProvider 配置 -->
+        <activity
+            android:name=".CalendarActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Picture_diary" />
+        
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="com.example.picture_diary.fileprovider"
@@ -49,7 +52,5 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
-
     </application>
-
 </manifest>

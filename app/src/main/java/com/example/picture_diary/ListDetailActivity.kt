@@ -26,6 +26,7 @@ class ListDetailActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityListDetailBinding
     private val REQUEST_IMAGE_CAPTURE = 1
+    private val REQUEST_PICK_IMAGE = 2
     private val photoList = mutableListOf<DatabaseHelper.PhotoData>()
     private lateinit var photoAdapter: PhotoAdapter
     private lateinit var dbHelper: DatabaseHelper
@@ -169,6 +170,11 @@ class ListDetailActivity : AppCompatActivity() {
             dispatchTakePictureIntent()
         }
 
+        // 设置+号按钮点击事件
+        binding.plusButton.setOnClickListener {
+            openGallery()
+        }
+
 
     }
 
@@ -201,6 +207,20 @@ class ListDetailActivity : AppCompatActivity() {
         } else {
             Toast.makeText(this, "No camera app available", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    private fun openGallery() {
+        // 检查存储权限
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            if (checkSelfPermission(android.Manifest.permission.READ_EXTERNAL_STORAGE) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(android.Manifest.permission.READ_EXTERNAL_STORAGE), REQUEST_STORAGE_PERMISSION)
+                return
+            }
+        }
+        
+        val intent = Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
+        intent.type = "image/*"
+        startActivityForResult(intent, REQUEST_PICK_IMAGE)
     }
 
     private var currentPhotoPath: String? = null
@@ -262,6 +282,74 @@ class ListDetailActivity : AppCompatActivity() {
                 } catch (e: Exception) {
                     android.util.Log.e("ListDetailActivity", "Error loading high-res image", e)
                     Toast.makeText(this, "Error loading image", Toast.LENGTH_SHORT).show()
+                }
+            }
+        } else if (requestCode == REQUEST_PICK_IMAGE && resultCode == RESULT_OK) {
+            // 从相册选择图片
+            data?.data?.let { uri ->
+                try {
+                    // 检查位置权限并获取位置
+                    checkLocationPermission()
+                    
+                    // 读取图片
+                    val inputStream = contentResolver.openInputStream(uri)
+                    val imageBitmap = android.graphics.BitmapFactory.decodeStream(inputStream)
+                    inputStream?.close()
+                    
+                    if (imageBitmap == null) {
+                        Toast.makeText(this, "无法加载选中的图片", Toast.LENGTH_SHORT).show()
+                        return
+                    }
+                    
+                    // 创建文件保存图片
+                    val timeStamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss").format(java.util.Date())
+                    val imageFileName = "JPEG_${timeStamp}_"
+                    val storageDir = getExternalFilesDir(android.os.Environment.DIRECTORY_PICTURES)
+                    val imageFile = java.io.File.createTempFile(
+                        imageFileName, /* 前缀 */
+                        ".jpg", /* 后缀 */
+                        storageDir /* 目录 */
+                    )
+                    
+                    // 保存图片到文件
+                    val fos = java.io.FileOutputStream(imageFile)
+                    imageBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 100, fos)
+                    fos.flush()
+                    fos.close()
+                    
+                    val path = imageFile.absolutePath
+                    
+                    // 生成缩略图
+                    val thumbnailPath = generateThumbnail(path)
+                    if (thumbnailPath == null) {
+                        Toast.makeText(this, "生成缩略图失败", Toast.LENGTH_SHORT).show()
+                        return
+                    }
+                    
+                    val time = java.text.SimpleDateFormat("yyyy/MM/dd").format(java.util.Date())
+                    val location = if (currentLocationAddress != null && currentLocationAddress!!.isNotEmpty()) {
+                        currentLocationAddress!!
+                    } else if (currentLocation != null) {
+                        "${currentLocation?.latitude}, ${currentLocation?.longitude}"
+                    } else {
+                        "未知"
+                    }
+                    val note = ""
+                    
+                    // 保存到数据库
+                    val photoId = dbHelper.insertPhoto(listId, path, thumbnailPath, time, location, note)
+                    
+                    // 加载缩略图用于显示
+                    val thumbnailBitmap = android.graphics.BitmapFactory.decodeFile(thumbnailPath)
+                    
+                    // 添加到列表
+                    val photoData = DatabaseHelper.PhotoData(photoId, thumbnailBitmap, path, thumbnailPath, time, location, note)
+                    photoList.add(photoData)
+                    photoAdapter.notifyDataSetChanged()
+                    Toast.makeText(this, "图片添加成功", Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    android.util.Log.e("ListDetailActivity", "Error picking image", e)
+                    Toast.makeText(this, "Error picking image: ${e.message}", Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -722,11 +810,17 @@ class ListDetailActivity : AppCompatActivity() {
         when (requestCode) {
             REQUEST_STORAGE_PERMISSION -> {
                 if (grantResults.isNotEmpty() && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                    // 权限已授予，继续生成PDF
-                    Toast.makeText(this, "存储权限已授予", Toast.LENGTH_SHORT).show()
-                    generatePdf()
+                    // 权限已授予，检查是否是从打开相册请求的权限
+                    if (permissions.contains(android.Manifest.permission.READ_EXTERNAL_STORAGE)) {
+                        // 重新打开相册
+                        openGallery()
+                    } else {
+                        // 继续生成PDF
+                        Toast.makeText(this, "存储权限已授予", Toast.LENGTH_SHORT).show()
+                        generatePdf()
+                    }
                 } else {
-                    Toast.makeText(this, "需要存储权限才能保存照片或生成PDF", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "需要存储权限才能保存照片、生成PDF或选择图片", Toast.LENGTH_SHORT).show()
                 }
             }
             REQUEST_LOCATION_PERMISSION -> {

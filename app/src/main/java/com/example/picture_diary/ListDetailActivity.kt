@@ -265,13 +265,23 @@ class ListDetailActivity : AppCompatActivity() {
                 return false
             }
             
-            val time = java.text.SimpleDateFormat("yyyy/MM/dd").format(java.util.Date())
-            val location = if (currentLocationAddress != null && currentLocationAddress!!.isNotEmpty()) {
+            // 获取图片中的位置和时间信息
+            val (imageLocation, imageTime) = getImageInfo(uri)
+            
+            val time = if (imageTime.isNotEmpty()) {
+                imageTime
+            } else {
+                java.text.SimpleDateFormat("yyyy/MM/dd HH:mm:ss").format(java.util.Date())
+            }
+            
+            val location = if (imageLocation.isNotEmpty()) {
+                imageLocation
+            } else if (currentLocationAddress != null && currentLocationAddress!!.isNotEmpty()) {
                 currentLocationAddress!!
             } else if (currentLocation != null) {
                 "${currentLocation?.latitude}, ${currentLocation?.longitude}"
             } else {
-                "未知"
+                ""
             }
             val note = ""
             
@@ -295,6 +305,115 @@ class ListDetailActivity : AppCompatActivity() {
             }
             return false
         }
+    }
+
+    private fun getImageInfo(uri: android.net.Uri): Pair<String, String> {
+        var location = ""
+        var time = ""
+        
+        try {
+            // 从图片中读取EXIF数据
+            val exifInterface = if (uri.scheme == "content") {
+                // 对于content URI，使用InputStream创建ExifInterface
+                val inputStream = contentResolver.openInputStream(uri)
+                android.media.ExifInterface(inputStream!!)
+            } else {
+                // 对于file URI，直接使用路径
+                android.media.ExifInterface(uri.path!!)
+            }
+            
+            // 获取经纬度
+            val latitude = getGPSCoordinate(exifInterface, android.media.ExifInterface.TAG_GPS_LATITUDE, android.media.ExifInterface.TAG_GPS_LATITUDE_REF)
+            val longitude = getGPSCoordinate(exifInterface, android.media.ExifInterface.TAG_GPS_LONGITUDE, android.media.ExifInterface.TAG_GPS_LONGITUDE_REF)
+            
+            // 检查是否有有效的地理位置信息
+            if (latitude != null && longitude != null) {
+                // 将经纬度转换为地址
+                location = getAddressFromCoordinates(latitude, longitude)
+            }
+            
+            // 获取拍摄时间
+            val dateTime = exifInterface.getAttribute(android.media.ExifInterface.TAG_DATETIME)
+            if (dateTime != null) {
+                // 格式化时间：YYYY:MM:DD HH:MM:SS -> YYYY/MM/DD HH:MM:SS
+                try {
+                    // 分割日期和时间部分
+                    val parts = dateTime.split(" ")
+                    if (parts.size == 2) {
+                        val datePart = parts[0].replace(":", "/")
+                        val timePart = parts[1]
+                        time = "$datePart $timePart"
+                    } else {
+                        time = dateTime
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("ListDetailActivity", "Error formatting time", e)
+                    time = dateTime
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("ListDetailActivity", "Error getting image info", e)
+        }
+        
+        return Pair(location, time)
+    }
+
+    private fun getGPSCoordinate(exifInterface: android.media.ExifInterface, latitudeTag: String, latitudeRefTag: String): Double? {
+        val latLongStr = exifInterface.getAttribute(latitudeTag)
+        val latLongRef = exifInterface.getAttribute(latitudeRefTag)
+        
+        if (latLongStr == null || latLongRef == null) {
+            return null
+        }
+        
+        // 解析度分秒格式的经纬度
+        val parts = latLongStr.split(",".toRegex()).dropLastWhile { it.isEmpty() }
+        if (parts.size != 3) {
+            return null
+        }
+        
+        try {
+            // 度
+            val degrees = parts[0].trim().toDouble()
+            // 分
+            val minutes = parts[1].trim().toDouble()
+            // 秒
+            val seconds = parts[2].trim().toDouble()
+            
+            // 转换为十进制格式
+            var coordinate = degrees + (minutes / 60.0) + (seconds / 3600.0)
+            
+            // 根据方向调整符号
+            if (latLongRef == "S" || latLongRef == "W") {
+                coordinate = -coordinate
+            }
+            
+            return coordinate
+        } catch (e: NumberFormatException) {
+            android.util.Log.e("ListDetailActivity", "Error parsing GPS coordinate", e)
+            return null
+        }
+    }
+
+    private fun getAddressFromCoordinates(latitude: Double, longitude: Double): String {
+        val geocoder = android.location.Geocoder(this, java.util.Locale.getDefault())
+        try {
+            val addresses = geocoder.getFromLocation(latitude, longitude, 1)
+            if (addresses != null && addresses.isNotEmpty()) {
+                val address = addresses[0]
+                val addressString = buildString {
+                    if (address.countryName != null) append(address.countryName).append(" ")
+                    if (address.adminArea != null) append(address.adminArea).append(" ")
+                    if (address.locality != null) append(address.locality).append(" ")
+                    if (address.thoroughfare != null) append(address.thoroughfare).append(" ")
+                    if (address.featureName != null) append(address.featureName)
+                }
+                return addressString.trim()
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("ListDetailActivity", "Error getting address from coordinates", e)
+        }
+        return ""
     }
 
     private var currentPhotoPath: String? = null
@@ -332,13 +451,24 @@ class ListDetailActivity : AppCompatActivity() {
                     
                     // 加载高分辨率图片
                     val imageBitmap = android.graphics.BitmapFactory.decodeFile(path)
-                    val time = java.text.SimpleDateFormat("yyyy/MM/dd").format(java.util.Date())
-                    val location = if (currentLocationAddress != null && currentLocationAddress!!.isNotEmpty()) {
+                    
+                    // 获取图片中的位置和时间信息
+                    val (imageLocation, imageTime) = getImageInfo(android.net.Uri.fromFile(java.io.File(path)))
+                    
+                    val time = if (imageTime.isNotEmpty()) {
+                        imageTime
+                    } else {
+                        java.text.SimpleDateFormat("yyyy/MM/dd HH:mm:ss").format(java.util.Date())
+                    }
+                    
+                    val location = if (imageLocation.isNotEmpty()) {
+                        imageLocation
+                    } else if (currentLocationAddress != null && currentLocationAddress!!.isNotEmpty()) {
                         currentLocationAddress!!
                     } else if (currentLocation != null) {
                         "${currentLocation?.latitude}, ${currentLocation?.longitude}"
                     } else {
-                        "未知"
+                        ""
                     }
                     val note = ""
                     

@@ -229,6 +229,13 @@ class ListDetailActivity : AppCompatActivity() {
             // 使用文件路径加载高分辨率图片
             currentPhotoPath?.let { path ->
                 try {
+                    // 生成缩略图
+                    val thumbnailPath = generateThumbnail(path)
+                    if (thumbnailPath == null) {
+                        Toast.makeText(this, "生成缩略图失败", Toast.LENGTH_SHORT).show()
+                        return
+                    }
+                    
                     // 加载高分辨率图片
                     val imageBitmap = android.graphics.BitmapFactory.decodeFile(path)
                     val time = java.text.SimpleDateFormat("yyyy/MM/dd").format(java.util.Date())
@@ -242,10 +249,13 @@ class ListDetailActivity : AppCompatActivity() {
                     val note = ""
                     
                     // 保存到数据库
-                    val photoId = dbHelper.insertPhoto(listId, path, time, location, note)
+                    val photoId = dbHelper.insertPhoto(listId, path, thumbnailPath, time, location, note)
+                    
+                    // 加载缩略图用于显示
+                    val thumbnailBitmap = android.graphics.BitmapFactory.decodeFile(thumbnailPath)
                     
                     // 添加到列表
-                    val photoData = DatabaseHelper.PhotoData(photoId, imageBitmap, time, location, note)
+                    val photoData = DatabaseHelper.PhotoData(photoId, thumbnailBitmap, path, thumbnailPath, time, location, note)
                     photoList.add(photoData)
                     photoAdapter.notifyDataSetChanged()
                     Toast.makeText(this, "Photo captured successfully", Toast.LENGTH_SHORT).show()
@@ -480,8 +490,10 @@ class ListDetailActivity : AppCompatActivity() {
                             val minImageHeight = 100f
                             val safeImageHeight = if (imageAvailableHeight > minImageHeight) imageAvailableHeight else minImageHeight
                             
+                            // 加载原始图片用于PDF生成
+                            val originalBitmap = android.graphics.BitmapFactory.decodeFile(photoData.imagePath)
                             // 调整图片大小
-                            val imageData = ImageDataFactory.create(bitmapToByteArray(photoData.image))
+                            val imageData = ImageDataFactory.create(bitmapToByteArray(originalBitmap))
                             val image = Image(imageData)
                             
                             // 计算图片宽度，保持原始比例
@@ -555,11 +567,17 @@ class ListDetailActivity : AppCompatActivity() {
 
     // 获取 PDF 文件路径
     private fun getPdfFilePath(): String {
+        // 使用Download目录下的PicDiary子目录
         val directory = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+        val picDiaryDir = java.io.File(directory, "PicDiary")
+        // 确保目录存在
+        if (!picDiaryDir.exists()) {
+            picDiaryDir.mkdirs()
+        }
         val currentYear = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
         val listName = intent.getStringExtra("LIST_NAME") ?: "Unknown List"
         val fileName = "${currentYear}_${listName.replace(" ", "_")}.pdf"
-        return "${directory.absolutePath}/$fileName"
+        return "${picDiaryDir.absolutePath}/$fileName"
     }
 
     // 辅助方法：Bitmap 转 ByteArray
@@ -631,8 +649,9 @@ class ListDetailActivity : AppCompatActivity() {
         when (requestCode) {
             REQUEST_STORAGE_PERMISSION -> {
                 if (grantResults.isNotEmpty() && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                    // 权限已授予，可以继续操作
+                    // 权限已授予，继续生成PDF
                     Toast.makeText(this, "存储权限已授予", Toast.LENGTH_SHORT).show()
+                    generatePdf()
                 } else {
                     Toast.makeText(this, "需要存储权限才能保存照片或生成PDF", Toast.LENGTH_SHORT).show()
                 }
@@ -649,17 +668,9 @@ class ListDetailActivity : AppCompatActivity() {
 
     // 保存照片到本地
     private fun savePhotoToLocal(bitmap: android.graphics.Bitmap) {
-        // 检查存储权限
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-            if (checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                requestPermissions(arrayOf(android.Manifest.permission.WRITE_EXTERNAL_STORAGE), REQUEST_STORAGE_PERMISSION)
-                return
-            }
-        }
-
         try {
-            // 创建保存目录
-            val directory = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_PICTURES)
+            // 使用应用专用的外部存储目录，避免权限问题
+            val directory = getExternalFilesDir(android.os.Environment.DIRECTORY_PICTURES)
             val pictureDiaryDir = java.io.File(directory, "PictureDiary")
             if (!pictureDiaryDir.exists()) {
                 pictureDiaryDir.mkdirs()
@@ -676,18 +687,58 @@ class ListDetailActivity : AppCompatActivity() {
             fos.flush()
             fos.close()
 
-            // 添加到媒体库
-            val contentValues = android.content.ContentValues().apply {
-                put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, fileName)
-                put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
-                put(android.provider.MediaStore.Images.Media.DATA, file.absolutePath)
-            }
-            contentResolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
-
             Toast.makeText(this, "照片已保存到: ${file.absolutePath}", Toast.LENGTH_LONG).show()
         } catch (e: Exception) {
             android.util.Log.e("ListDetailActivity", "Error saving photo", e)
             Toast.makeText(this, "保存照片失败: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // 生成缩略图
+    private fun generateThumbnail(originalPath: String): String? {
+        try {
+            // 加载原始图片
+            val originalBitmap = android.graphics.BitmapFactory.decodeFile(originalPath)
+            if (originalBitmap == null) {
+                android.util.Log.e("ListDetailActivity", "Failed to decode original image")
+                return null
+            }
+
+            // 计算缩略图尺寸（保持比例）
+            val maxThumbnailSize = 300 // 最大边长为300像素
+            val width = originalBitmap.width
+            val height = originalBitmap.height
+            val scale = maxThumbnailSize.toFloat() / Math.max(width, height)
+            val thumbnailWidth = (width * scale).toInt()
+            val thumbnailHeight = (height * scale).toInt()
+
+            // 创建缩略图
+            val thumbnailBitmap = android.graphics.Bitmap.createScaledBitmap(originalBitmap, thumbnailWidth, thumbnailHeight, true)
+
+            // 保存缩略图到文件
+            val timeStamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss").format(java.util.Date())
+            val thumbnailFileName = "THUMB_${timeStamp}_"
+            val storageDir = getExternalFilesDir(android.os.Environment.DIRECTORY_PICTURES)
+            // 确保目录存在
+            if (storageDir != null && !storageDir.exists()) {
+                storageDir.mkdirs()
+            }
+            val thumbnailFile = java.io.File.createTempFile(
+                thumbnailFileName, /* 前缀 */
+                ".jpg", /* 后缀 */
+                storageDir /* 目录 */
+            )
+
+            // 保存缩略图
+            val fos = java.io.FileOutputStream(thumbnailFile)
+            thumbnailBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 75, fos) // 75% 质量
+            fos.flush()
+            fos.close()
+
+            return thumbnailFile.absolutePath
+        } catch (e: Exception) {
+            android.util.Log.e("ListDetailActivity", "Error generating thumbnail", e)
+            return null
         }
     }
 

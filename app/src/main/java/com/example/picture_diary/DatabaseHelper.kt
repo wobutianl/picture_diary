@@ -12,7 +12,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME
 
     companion object {
         private const val DATABASE_NAME = "picture_diary.db"
-        private const val DATABASE_VERSION = 2
+        private const val DATABASE_VERSION = 3
         
         // List 表
         private const val TABLE_LIST = "lists"
@@ -24,6 +24,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME
         private const val COLUMN_PHOTO_ID = "id"
         private const val COLUMN_PHOTO_LIST_ID = "list_id"
         private const val COLUMN_PHOTO_IMAGE_PATH = "image_path"
+        private const val COLUMN_PHOTO_THUMBNAIL_PATH = "thumbnail_path"
         private const val COLUMN_PHOTO_TIME = "time"
         private const val COLUMN_PHOTO_LOCATION = "location"
         private const val COLUMN_PHOTO_NOTE = "note"
@@ -35,7 +36,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME
         db.execSQL(createListTable)
         
         // 创建 Photo 表
-        val createPhotoTable = "CREATE TABLE $TABLE_PHOTO ($COLUMN_PHOTO_ID INTEGER PRIMARY KEY AUTOINCREMENT, $COLUMN_PHOTO_LIST_ID INTEGER, $COLUMN_PHOTO_IMAGE_PATH TEXT, $COLUMN_PHOTO_TIME TEXT, $COLUMN_PHOTO_LOCATION TEXT, $COLUMN_PHOTO_NOTE TEXT, FOREIGN KEY($COLUMN_PHOTO_LIST_ID) REFERENCES $TABLE_LIST($COLUMN_LIST_ID))"
+        val createPhotoTable = "CREATE TABLE $TABLE_PHOTO ($COLUMN_PHOTO_ID INTEGER PRIMARY KEY AUTOINCREMENT, $COLUMN_PHOTO_LIST_ID INTEGER, $COLUMN_PHOTO_IMAGE_PATH TEXT, $COLUMN_PHOTO_THUMBNAIL_PATH TEXT, $COLUMN_PHOTO_TIME TEXT, $COLUMN_PHOTO_LOCATION TEXT, $COLUMN_PHOTO_NOTE TEXT, FOREIGN KEY($COLUMN_PHOTO_LIST_ID) REFERENCES $TABLE_LIST($COLUMN_LIST_ID))"
         db.execSQL(createPhotoTable)
     }
 
@@ -89,11 +90,12 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME
     }
 
     // 插入 Photo
-    fun insertPhoto(listId: Long, imagePath: String, time: String, location: String, note: String): Long {
+    fun insertPhoto(listId: Long, imagePath: String, thumbnailPath: String, time: String, location: String, note: String): Long {
         val db = writableDatabase
         val values = ContentValues().apply {
             put(COLUMN_PHOTO_LIST_ID, listId)
             put(COLUMN_PHOTO_IMAGE_PATH, imagePath)
+            put(COLUMN_PHOTO_THUMBNAIL_PATH, thumbnailPath)
             put(COLUMN_PHOTO_TIME, time)
             put(COLUMN_PHOTO_LOCATION, location)
             put(COLUMN_PHOTO_NOTE, note)
@@ -120,17 +122,19 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME
     fun getPhotosByListId(listId: Long): List<PhotoData> {
         val db = readableDatabase
         val photos = mutableListOf<PhotoData>()
-        val cursor = db.rawQuery("SELECT $COLUMN_PHOTO_ID, $COLUMN_PHOTO_IMAGE_PATH, $COLUMN_PHOTO_TIME, $COLUMN_PHOTO_LOCATION, $COLUMN_PHOTO_NOTE FROM $TABLE_PHOTO WHERE $COLUMN_PHOTO_LIST_ID = ?", arrayOf(listId.toString()))
+        val cursor = db.rawQuery("SELECT $COLUMN_PHOTO_ID, $COLUMN_PHOTO_IMAGE_PATH, $COLUMN_PHOTO_THUMBNAIL_PATH, $COLUMN_PHOTO_TIME, $COLUMN_PHOTO_LOCATION, $COLUMN_PHOTO_NOTE FROM $TABLE_PHOTO WHERE $COLUMN_PHOTO_LIST_ID = ?", arrayOf(listId.toString()))
         if (cursor.moveToFirst()) {
             do {
                 val id = cursor.getLong(0)
                 val imagePath = cursor.getString(1)
-                val time = cursor.getString(2)
-                val location = cursor.getString(3)
-                val note = cursor.getString(4)
-                val image = BitmapFactory.decodeFile(imagePath)
+                val thumbnailPath = cursor.getString(2)
+                val time = cursor.getString(3)
+                val location = cursor.getString(4)
+                val note = cursor.getString(5)
+                // 加载缩略图以提高性能
+                val image = BitmapFactory.decodeFile(thumbnailPath)
                 if (image != null) {
-                    photos.add(PhotoData(id, image, time, location, note))
+                    photos.add(PhotoData(id, image, imagePath, thumbnailPath, time, location, note))
                 }
             } while (cursor.moveToNext())
         }
@@ -154,5 +158,5 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME
     }
 
     // 数据类：PhotoData
-    data class PhotoData(val id: Long, val image: Bitmap, val time: String, val location: String, val note: String)
+    data class PhotoData(val id: Long, val image: Bitmap, val imagePath: String, val thumbnailPath: String, val time: String, val location: String, val note: String)
 }

@@ -218,9 +218,83 @@ class ListDetailActivity : AppCompatActivity() {
             }
         }
         
-        val intent = Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
+        val intent = Intent(Intent.ACTION_GET_CONTENT)
         intent.type = "image/*"
-        startActivityForResult(intent, REQUEST_PICK_IMAGE)
+        intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+        startActivityForResult(Intent.createChooser(intent, "选择图片"), REQUEST_PICK_IMAGE)
+    }
+
+    private fun processSelectedImage(uri: android.net.Uri): Boolean {
+        try {
+            // 读取图片
+            val inputStream = contentResolver.openInputStream(uri)
+            val imageBitmap = android.graphics.BitmapFactory.decodeStream(inputStream)
+            inputStream?.close()
+            
+            if (imageBitmap == null) {
+                runOnUiThread {
+                    Toast.makeText(this, "无法加载选中的图片", Toast.LENGTH_SHORT).show()
+                }
+                return false
+            }
+            
+            // 创建文件保存图片
+            val timeStamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss").format(java.util.Date())
+            val imageFileName = "JPEG_${timeStamp}_"
+            val storageDir = getExternalFilesDir(android.os.Environment.DIRECTORY_PICTURES)
+            val imageFile = java.io.File.createTempFile(
+                imageFileName, /* 前缀 */
+                ".jpg", /* 后缀 */
+                storageDir /* 目录 */
+            )
+            
+            // 保存图片到文件
+            val fos = java.io.FileOutputStream(imageFile)
+            imageBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 100, fos)
+            fos.flush()
+            fos.close()
+            
+            val path = imageFile.absolutePath
+            
+            // 生成缩略图
+            val thumbnailPath = generateThumbnail(path)
+            if (thumbnailPath == null) {
+                runOnUiThread {
+                    Toast.makeText(this, "生成缩略图失败", Toast.LENGTH_SHORT).show()
+                }
+                return false
+            }
+            
+            val time = java.text.SimpleDateFormat("yyyy/MM/dd").format(java.util.Date())
+            val location = if (currentLocationAddress != null && currentLocationAddress!!.isNotEmpty()) {
+                currentLocationAddress!!
+            } else if (currentLocation != null) {
+                "${currentLocation?.latitude}, ${currentLocation?.longitude}"
+            } else {
+                "未知"
+            }
+            val note = ""
+            
+            // 保存到数据库
+            val photoId = dbHelper.insertPhoto(listId, path, thumbnailPath, time, location, note)
+            
+            // 加载缩略图用于显示
+            val thumbnailBitmap = android.graphics.BitmapFactory.decodeFile(thumbnailPath)
+            
+            // 添加到列表并更新UI
+            runOnUiThread {
+                val photoData = DatabaseHelper.PhotoData(photoId, thumbnailBitmap, path, thumbnailPath, time, location, note)
+                photoList.add(photoData)
+                photoAdapter.notifyDataSetChanged()
+            }
+            return true
+        } catch (e: Exception) {
+            android.util.Log.e("ListDetailActivity", "Error processing selected image", e)
+            runOnUiThread {
+                Toast.makeText(this, "处理图片失败: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+            return false
+        }
     }
 
     private var currentPhotoPath: String? = null
@@ -286,71 +360,53 @@ class ListDetailActivity : AppCompatActivity() {
             }
         } else if (requestCode == REQUEST_PICK_IMAGE && resultCode == RESULT_OK) {
             // 从相册选择图片
-            data?.data?.let { uri ->
-                try {
-                    // 检查位置权限并获取位置
-                    checkLocationPermission()
+            try {
+                // 检查位置权限并获取位置
+                checkLocationPermission()
+                
+                // 处理图片选择
+                if (data != null) {
+                    // 显示加载指示器
+                    val progressDialog = android.app.ProgressDialog(this)
+                    progressDialog.setTitle("处理中")
+                    progressDialog.setMessage("正在处理图片...")
+                    progressDialog.setCancelable(false)
+                    progressDialog.show()
                     
-                    // 读取图片
-                    val inputStream = contentResolver.openInputStream(uri)
-                    val imageBitmap = android.graphics.BitmapFactory.decodeStream(inputStream)
-                    inputStream?.close()
-                    
-                    if (imageBitmap == null) {
-                        Toast.makeText(this, "无法加载选中的图片", Toast.LENGTH_SHORT).show()
-                        return
-                    }
-                    
-                    // 创建文件保存图片
-                    val timeStamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss").format(java.util.Date())
-                    val imageFileName = "JPEG_${timeStamp}_"
-                    val storageDir = getExternalFilesDir(android.os.Environment.DIRECTORY_PICTURES)
-                    val imageFile = java.io.File.createTempFile(
-                        imageFileName, /* 前缀 */
-                        ".jpg", /* 后缀 */
-                        storageDir /* 目录 */
-                    )
-                    
-                    // 保存图片到文件
-                    val fos = java.io.FileOutputStream(imageFile)
-                    imageBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 100, fos)
-                    fos.flush()
-                    fos.close()
-                    
-                    val path = imageFile.absolutePath
-                    
-                    // 生成缩略图
-                    val thumbnailPath = generateThumbnail(path)
-                    if (thumbnailPath == null) {
-                        Toast.makeText(this, "生成缩略图失败", Toast.LENGTH_SHORT).show()
-                        return
-                    }
-                    
-                    val time = java.text.SimpleDateFormat("yyyy/MM/dd").format(java.util.Date())
-                    val location = if (currentLocationAddress != null && currentLocationAddress!!.isNotEmpty()) {
-                        currentLocationAddress!!
-                    } else if (currentLocation != null) {
-                        "${currentLocation?.latitude}, ${currentLocation?.longitude}"
-                    } else {
-                        "未知"
-                    }
-                    val note = ""
-                    
-                    // 保存到数据库
-                    val photoId = dbHelper.insertPhoto(listId, path, thumbnailPath, time, location, note)
-                    
-                    // 加载缩略图用于显示
-                    val thumbnailBitmap = android.graphics.BitmapFactory.decodeFile(thumbnailPath)
-                    
-                    // 添加到列表
-                    val photoData = DatabaseHelper.PhotoData(photoId, thumbnailBitmap, path, thumbnailPath, time, location, note)
-                    photoList.add(photoData)
-                    photoAdapter.notifyDataSetChanged()
-                    Toast.makeText(this, "图片添加成功", Toast.LENGTH_SHORT).show()
-                } catch (e: Exception) {
-                    android.util.Log.e("ListDetailActivity", "Error picking image", e)
-                    Toast.makeText(this, "Error picking image: ${e.message}", Toast.LENGTH_SHORT).show()
+                    // 在后台线程处理图片
+                    Thread {
+                        // 收集所有需要处理的URI
+                        val uris = mutableListOf<android.net.Uri>()
+                        
+                        if (data.clipData != null) {
+                            val clipData = data.clipData!!
+                            for (i in 0 until clipData.itemCount) {
+                                uris.add(clipData.getItemAt(i).uri)
+                            }
+                        } else if (data.data != null) {
+                            uris.add(data.data!!)
+                        }
+                        
+                        var successCount = 0
+                        // 处理所有图片
+                        for (uri in uris) {
+                            if (processSelectedImage(uri)) {
+                                successCount++
+                            }
+                        }
+                        
+                        // 在主线程更新UI
+                        runOnUiThread {
+                            progressDialog.dismiss()
+                            if (successCount > 0) {
+                                Toast.makeText(this, "成功添加 $successCount 张图片", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }.start()
                 }
+            } catch (e: Exception) {
+                android.util.Log.e("ListDetailActivity", "Error picking images", e)
+                Toast.makeText(this, "Error picking images: ${e.message}", Toast.LENGTH_SHORT).show()
             }
         }
     }

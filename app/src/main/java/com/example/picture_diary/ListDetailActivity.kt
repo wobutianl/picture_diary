@@ -268,18 +268,16 @@ class ListDetailActivity : AppCompatActivity() {
             // 获取图片中的位置和时间信息
             val (imageLocation, imageTime) = getImageInfo(uri)
             
+            // 优先使用图片中的时间
             val time = if (imageTime.isNotEmpty()) {
                 imageTime
             } else {
                 java.text.SimpleDateFormat("yyyy/MM/dd HH:mm:ss").format(java.util.Date())
             }
             
+            // 只使用图片中的位置信息，不使用设备位置
             val location = if (imageLocation.isNotEmpty()) {
                 imageLocation
-            } else if (currentLocationAddress != null && currentLocationAddress!!.isNotEmpty()) {
-                currentLocationAddress!!
-            } else if (currentLocation != null) {
-                "${currentLocation?.latitude}, ${currentLocation?.longitude}"
             } else {
                 ""
             }
@@ -328,8 +326,18 @@ class ListDetailActivity : AppCompatActivity() {
             
             // 检查是否有有效的地理位置信息
             if (latitude != null && longitude != null) {
-                // 将经纬度转换为地址
-                location = getAddressFromCoordinates(latitude, longitude)
+                // 将经纬度转换为实际地址
+                val address = getAddressFromCoordinates(latitude, longitude)
+                if (address.isNotEmpty()) {
+                    location = address
+                    android.util.Log.d("ListDetailActivity", "Got address from image: $location")
+                } else {
+                    // 如果地址转换失败，使用经纬度
+                    location = "${latitude}, ${longitude}"
+                    android.util.Log.d("ListDetailActivity", "Using coordinates instead of address: $location")
+                }
+            } else {
+                android.util.Log.d("ListDetailActivity", "No GPS data found in image")
             }
             
             // 获取拍摄时间
@@ -350,6 +358,9 @@ class ListDetailActivity : AppCompatActivity() {
                     android.util.Log.e("ListDetailActivity", "Error formatting time", e)
                     time = dateTime
                 }
+                android.util.Log.d("ListDetailActivity", "Got time from image: $time")
+            } else {
+                android.util.Log.d("ListDetailActivity", "No time data found in image")
             }
         } catch (e: Exception) {
             android.util.Log.e("ListDetailActivity", "Error getting image info", e)
@@ -363,22 +374,58 @@ class ListDetailActivity : AppCompatActivity() {
         val latLongRef = exifInterface.getAttribute(latitudeRefTag)
         
         if (latLongStr == null || latLongRef == null) {
+            android.util.Log.d("ListDetailActivity", "No GPS data found for $latitudeTag")
             return null
         }
+        
+        android.util.Log.d("ListDetailActivity", "GPS data for $latitudeTag: $latLongStr, ref: $latLongRef")
         
         // 解析度分秒格式的经纬度
-        val parts = latLongStr.split(",".toRegex()).dropLastWhile { it.isEmpty() }
-        if (parts.size != 3) {
-            return null
-        }
-        
         try {
+            // 尝试不同的分割方式
+            val parts = latLongStr.split(" ").filter { it.isNotEmpty() }
+            android.util.Log.d("ListDetailActivity", "GPS parts: $parts")
+            
+            if (parts.size < 3) {
+                // 尝试用逗号分割
+                val commaParts = latLongStr.split(",").filter { it.isNotEmpty() }
+                android.util.Log.d("ListDetailActivity", "GPS comma parts: $commaParts")
+                if (commaParts.size >= 3) {
+                    // 度
+                    val degrees = parseGPSPart(commaParts[0].trim())
+                    // 分
+                    val minutes = parseGPSPart(commaParts[1].trim())
+                    // 秒
+                    val seconds = parseGPSPart(commaParts[2].trim())
+                    
+                    if (degrees != null && minutes != null && seconds != null) {
+                        // 转换为十进制格式
+                        var coordinate = degrees + (minutes / 60.0) + (seconds / 3600.0)
+                        
+                        // 根据方向调整符号
+                        if (latLongRef == "S" || latLongRef == "W") {
+                            coordinate = -coordinate
+                        }
+                        
+                        android.util.Log.d("ListDetailActivity", "Parsed GPS coordinate from comma parts: $coordinate")
+                        return coordinate
+                    }
+                }
+                android.util.Log.e("ListDetailActivity", "Invalid GPS coordinate format: $latLongStr")
+                return null
+            }
+            
             // 度
-            val degrees = parts[0].trim().toDouble()
+            val degrees = parseGPSPart(parts[0])
             // 分
-            val minutes = parts[1].trim().toDouble()
+            val minutes = parseGPSPart(parts[1])
             // 秒
-            val seconds = parts[2].trim().toDouble()
+            val seconds = parseGPSPart(parts[2])
+            
+            if (degrees == null || minutes == null || seconds == null) {
+                android.util.Log.e("ListDetailActivity", "Failed to parse GPS parts: degrees=$degrees, minutes=$minutes, seconds=$seconds")
+                return null
+            }
             
             // 转换为十进制格式
             var coordinate = degrees + (minutes / 60.0) + (seconds / 3600.0)
@@ -388,27 +435,71 @@ class ListDetailActivity : AppCompatActivity() {
                 coordinate = -coordinate
             }
             
+            android.util.Log.d("ListDetailActivity", "Parsed GPS coordinate: $coordinate")
             return coordinate
-        } catch (e: NumberFormatException) {
+        } catch (e: Exception) {
             android.util.Log.e("ListDetailActivity", "Error parsing GPS coordinate", e)
             return null
         }
     }
 
+    private fun parseGPSPart(part: String): Double? {
+        try {
+            // 处理分数格式，如 "123/1"
+            if (part.contains("/")) {
+                val fractionParts = part.split("/")
+                if (fractionParts.size == 2) {
+                    val numerator = fractionParts[0].toDouble()
+                    val denominator = fractionParts[1].toDouble()
+                    if (denominator != 0.0) {
+                        return numerator / denominator
+                    }
+                }
+            }
+            // 直接解析为Double
+            return part.toDouble()
+        } catch (e: NumberFormatException) {
+            android.util.Log.e("ListDetailActivity", "Error parsing GPS part: $part", e)
+            return null
+        }
+    }
+
     private fun getAddressFromCoordinates(latitude: Double, longitude: Double): String {
+        android.util.Log.d("ListDetailActivity", "Getting address for coordinates: $latitude, $longitude")
         val geocoder = android.location.Geocoder(this, java.util.Locale.getDefault())
         try {
             val addresses = geocoder.getFromLocation(latitude, longitude, 1)
+            android.util.Log.d("ListDetailActivity", "Geocoder result: $addresses")
             if (addresses != null && addresses.isNotEmpty()) {
                 val address = addresses[0]
+                android.util.Log.d("ListDetailActivity", "Address found: $address")
                 val addressString = buildString {
-                    if (address.countryName != null) append(address.countryName).append(" ")
-                    if (address.adminArea != null) append(address.adminArea).append(" ")
-                    if (address.locality != null) append(address.locality).append(" ")
-                    if (address.thoroughfare != null) append(address.thoroughfare).append(" ")
-                    if (address.featureName != null) append(address.featureName)
+                    if (address.countryName != null) {
+                        append(address.countryName).append(" ")
+                        android.util.Log.d("ListDetailActivity", "Country: ${address.countryName}")
+                    }
+                    if (address.adminArea != null) {
+                        append(address.adminArea).append(" ")
+                        android.util.Log.d("ListDetailActivity", "Admin area: ${address.adminArea}")
+                    }
+                    if (address.locality != null) {
+                        append(address.locality).append(" ")
+                        android.util.Log.d("ListDetailActivity", "Locality: ${address.locality}")
+                    }
+                    if (address.thoroughfare != null) {
+                        append(address.thoroughfare).append(" ")
+                        android.util.Log.d("ListDetailActivity", "Thoroughfare: ${address.thoroughfare}")
+                    }
+                    if (address.featureName != null) {
+                        append(address.featureName)
+                        android.util.Log.d("ListDetailActivity", "Feature name: ${address.featureName}")
+                    }
                 }
-                return addressString.trim()
+                val trimmedAddress = addressString.trim()
+                android.util.Log.d("ListDetailActivity", "Final address: $trimmedAddress")
+                return trimmedAddress
+            } else {
+                android.util.Log.d("ListDetailActivity", "No address found for coordinates")
             }
         } catch (e: Exception) {
             android.util.Log.e("ListDetailActivity", "Error getting address from coordinates", e)
@@ -452,18 +543,18 @@ class ListDetailActivity : AppCompatActivity() {
                     // 加载高分辨率图片
                     val imageBitmap = android.graphics.BitmapFactory.decodeFile(path)
                     
-                    // 获取图片中的位置和时间信息
-                    val (imageLocation, imageTime) = getImageInfo(android.net.Uri.fromFile(java.io.File(path)))
+                    // 获取图片中的时间信息
+                    val (_, imageTime) = getImageInfo(android.net.Uri.fromFile(java.io.File(path)))
                     
+                    // 优先使用图片中的时间
                     val time = if (imageTime.isNotEmpty()) {
                         imageTime
                     } else {
                         java.text.SimpleDateFormat("yyyy/MM/dd HH:mm:ss").format(java.util.Date())
                     }
                     
-                    val location = if (imageLocation.isNotEmpty()) {
-                        imageLocation
-                    } else if (currentLocationAddress != null && currentLocationAddress!!.isNotEmpty()) {
+                    // 使用设备位置作为拍摄地点
+                    val location = if (currentLocationAddress != null && currentLocationAddress!!.isNotEmpty()) {
                         currentLocationAddress!!
                     } else if (currentLocation != null) {
                         "${currentLocation?.latitude}, ${currentLocation?.longitude}"
@@ -616,14 +707,6 @@ class ListDetailActivity : AppCompatActivity() {
 
     // 生成 PDF 文件
     private fun generatePdf() {
-        // 检查存储权限
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-            if (checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                requestPermissions(arrayOf(android.Manifest.permission.WRITE_EXTERNAL_STORAGE), REQUEST_STORAGE_PERMISSION)
-                return
-            }
-        }
-        
         try {
             val pdfPath = getPdfFilePath()
             android.util.Log.d("ListDetailActivity", "Generating PDF at: $pdfPath")
@@ -643,17 +726,42 @@ class ListDetailActivity : AppCompatActivity() {
             // 确保父目录存在
             val pdfFile = java.io.File(pdfPath)
             val parentDir = pdfFile.parentFile
-            if (parentDir != null && !parentDir.exists()) {
-                val created = parentDir.mkdirs()
-                android.util.Log.d("ListDetailActivity", "Created parent directory: $created, path: ${parentDir.absolutePath}")
+            android.util.Log.d("ListDetailActivity", "PDF file path: ${pdfFile.absolutePath}")
+            android.util.Log.d("ListDetailActivity", "Parent directory: ${parentDir?.absolutePath}")
+            
+            if (parentDir != null) {
+                if (!parentDir.exists()) {
+                    android.util.Log.d("ListDetailActivity", "Parent directory does not exist, creating...")
+                    val created = parentDir.mkdirs()
+                    android.util.Log.d("ListDetailActivity", "Created parent directory: $created, path: ${parentDir.absolutePath}")
+                    if (!created) {
+                        android.util.Log.e("ListDetailActivity", "Failed to create parent directory")
+                        Toast.makeText(this, "生成PDF失败：无法创建目录", Toast.LENGTH_SHORT).show()
+                        return
+                    }
+                } else {
+                    android.util.Log.d("ListDetailActivity", "Parent directory already exists")
+                }
+                
+                // 检查目录是否可写
+                if (!parentDir.canWrite()) {
+                    android.util.Log.e("ListDetailActivity", "Parent directory is not writable")
+                    Toast.makeText(this, "生成PDF失败：目录不可写", Toast.LENGTH_SHORT).show()
+                    return
+                }
+            } else {
+                android.util.Log.e("ListDetailActivity", "Parent directory is null")
+                Toast.makeText(this, "生成PDF失败：无效的文件路径", Toast.LENGTH_SHORT).show()
+                return
             }
             
             // 使用FileOutputStream以覆盖模式打开文件，确保能够替换现有文件
             val fileOutputStream = try {
+                android.util.Log.d("ListDetailActivity", "Creating FileOutputStream for: $pdfPath")
                 java.io.FileOutputStream(pdfPath, false) // false表示覆盖模式
             } catch (e: Exception) {
                 android.util.Log.e("ListDetailActivity", "Error creating FileOutputStream: ${e.message}", e)
-                Toast.makeText(this, "生成PDF失败：无法创建文件", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "生成PDF失败：无法创建文件 - ${e.message}", Toast.LENGTH_SHORT).show()
                 return
             }
             
@@ -872,8 +980,8 @@ class ListDetailActivity : AppCompatActivity() {
 
     // 获取 PDF 文件路径
     private fun getPdfFilePath(): String {
-        // 使用Download目录下的PictureDiary子目录
-        val directory = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+        // 使用应用专用的存储目录，避免权限问题
+        val directory = getExternalFilesDir(android.os.Environment.DIRECTORY_DOCUMENTS)
         val pictureDiaryDir = java.io.File(directory, "PictureDiary")
         // 确保目录存在
         if (!pictureDiaryDir.exists()) {

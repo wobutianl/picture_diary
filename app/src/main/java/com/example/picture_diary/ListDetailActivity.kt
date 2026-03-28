@@ -338,6 +338,7 @@ class ListDetailActivity : AppCompatActivity() {
     private val REQUEST_LOCATION_PERMISSION = 2
     private var currentLocation: android.location.Location? = null
     private var currentLocationAddress: String? = null
+    private var locationListener: android.location.LocationListener? = null
 
     // 生成 PDF 文件
     private fun generatePdf() {
@@ -359,8 +360,38 @@ class ListDetailActivity : AppCompatActivity() {
                 return
             }
             
+            if (pdfPath.isNullOrEmpty()) {
+                android.util.Log.e("ListDetailActivity", "PDF path is empty")
+                Toast.makeText(this, "生成PDF失败：文件路径为空", Toast.LENGTH_SHORT).show()
+                return
+            }
+            
+            // 确保父目录存在
+            val pdfFile = java.io.File(pdfPath)
+            val parentDir = pdfFile.parentFile
+            if (parentDir != null && !parentDir.exists()) {
+                val created = parentDir.mkdirs()
+                android.util.Log.d("ListDetailActivity", "Created parent directory: $created, path: ${parentDir.absolutePath}")
+            }
+            
+            // 使用FileOutputStream以覆盖模式打开文件，确保能够替换现有文件
+            val fileOutputStream = try {
+                java.io.FileOutputStream(pdfPath, false) // false表示覆盖模式
+            } catch (e: Exception) {
+                android.util.Log.e("ListDetailActivity", "Error creating FileOutputStream: ${e.message}", e)
+                Toast.makeText(this, "生成PDF失败：无法创建文件", Toast.LENGTH_SHORT).show()
+                return
+            }
+            
             // 创建 PDF 文档
-            val pdfWriter = PdfWriter(pdfPath)
+            val pdfWriter = try {
+                PdfWriter(fileOutputStream)
+            } catch (e: Exception) {
+                android.util.Log.e("ListDetailActivity", "Error creating PdfWriter: ${e.message}", e)
+                fileOutputStream.close()
+                Toast.makeText(this, "生成PDF失败：无法创建PDF写入器", Toast.LENGTH_SHORT).show()
+                return
+            }
             val pdfDocument = PdfDocument(pdfWriter)
             val document = Document(pdfDocument)
             
@@ -567,17 +598,20 @@ class ListDetailActivity : AppCompatActivity() {
 
     // 获取 PDF 文件路径
     private fun getPdfFilePath(): String {
-        // 使用Download目录下的PicDiary子目录
+        // 使用Download目录下的PictureDiary子目录
         val directory = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
-        val picDiaryDir = java.io.File(directory, "PicDiary")
+        val pictureDiaryDir = java.io.File(directory, "PictureDiary")
         // 确保目录存在
-        if (!picDiaryDir.exists()) {
-            picDiaryDir.mkdirs()
+        if (!pictureDiaryDir.exists()) {
+            val created = pictureDiaryDir.mkdirs()
+            android.util.Log.d("ListDetailActivity", "Created directory: $created, path: ${pictureDiaryDir.absolutePath}")
         }
         val currentYear = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
         val listName = intent.getStringExtra("LIST_NAME") ?: "Unknown List"
         val fileName = "${currentYear}_${listName.replace(" ", "_")}.pdf"
-        return "${picDiaryDir.absolutePath}/$fileName"
+        val pdfPath = "${pictureDiaryDir.absolutePath}/$fileName"
+        android.util.Log.d("ListDetailActivity", "PDF path: $pdfPath")
+        return pdfPath
     }
 
     // 辅助方法：Bitmap 转 ByteArray
@@ -603,19 +637,48 @@ class ListDetailActivity : AppCompatActivity() {
     // 获取当前位置
     private fun getCurrentLocation() {
         val locationManager = getSystemService(android.content.Context.LOCATION_SERVICE) as android.location.LocationManager
-        if (locationManager.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER)) {
-            try {
-                currentLocation = locationManager.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER)
-                if (currentLocation == null) {
-                    currentLocation = locationManager.getLastKnownLocation(android.location.LocationManager.NETWORK_PROVIDER)
+        try {
+            // 实现LocationListener
+            locationListener = object : android.location.LocationListener {
+                override fun onLocationChanged(location: android.location.Location) {
+                    // 获取到新位置
+                    currentLocation = location
+                    getAddressFromLocation(location)
+                    // 移除监听器，避免重复获取
+                    locationManager.removeUpdates(this)
                 }
-                // 获取地址信息
-                currentLocation?.let {
-                    getAddressFromLocation(it)
-                }
-            } catch (e: SecurityException) {
-                android.util.Log.e("ListDetailActivity", "Error getting location", e)
+                
+                override fun onStatusChanged(provider: String?, status: Int, extras: android.os.Bundle?) {}
+                override fun onProviderEnabled(provider: String) {}
+                override fun onProviderDisabled(provider: String) {}
             }
+            
+            // 优先使用GPS提供者
+            if (locationManager.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER)) {
+                locationListener?.let {
+                    locationManager.requestSingleUpdate(android.location.LocationManager.GPS_PROVIDER, it, null)
+                }
+            }
+            
+            // 如果GPS不可用，尝试使用网络提供者
+            if (!locationManager.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER) && 
+                locationManager.isProviderEnabled(android.location.LocationManager.NETWORK_PROVIDER)) {
+                locationListener?.let {
+                    locationManager.requestSingleUpdate(android.location.LocationManager.NETWORK_PROVIDER, it, null)
+                }
+            }
+            
+            // 同时获取最后已知位置作为备选
+            val lastKnownLocation = locationManager.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER) ?: 
+                                   locationManager.getLastKnownLocation(android.location.LocationManager.NETWORK_PROVIDER) ?: 
+                                   locationManager.getLastKnownLocation(android.location.LocationManager.PASSIVE_PROVIDER)
+            
+            if (lastKnownLocation != null) {
+                currentLocation = lastKnownLocation
+                getAddressFromLocation(lastKnownLocation)
+            }
+        } catch (e: SecurityException) {
+            android.util.Log.e("ListDetailActivity", "Error getting location", e)
         }
     }
 
@@ -628,6 +691,7 @@ class ListDetailActivity : AppCompatActivity() {
                 if (addresses != null && addresses.isNotEmpty()) {
                     val address = addresses[0]
                     val addressString = buildString {
+                        if (address.countryName != null) append(address.countryName).append(" ")
                         if (address.adminArea != null) append(address.adminArea).append(" ")
                         if (address.locality != null) append(address.locality).append(" ")
                         if (address.thoroughfare != null) append(address.thoroughfare).append(" ")
@@ -636,9 +700,18 @@ class ListDetailActivity : AppCompatActivity() {
                     runOnUiThread {
                         currentLocationAddress = addressString
                     }
+                } else {
+                    // 地址解析失败，使用经纬度作为位置信息
+                    runOnUiThread {
+                        currentLocationAddress = "${location.latitude}, ${location.longitude}"
+                    }
                 }
             } catch (e: Exception) {
                 android.util.Log.e("ListDetailActivity", "Error getting address", e)
+                // 异常情况下，使用经纬度作为位置信息
+                runOnUiThread {
+                    currentLocationAddress = "${location.latitude}, ${location.longitude}"
+                }
             }
         }.start()
     }
@@ -775,6 +848,19 @@ class ListDetailActivity : AppCompatActivity() {
         } catch (e: Exception) {
             android.util.Log.e("ListDetailActivity", "Error sharing photo", e)
             Toast.makeText(this, "分享照片失败: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        // 移除位置监听器，避免内存泄漏
+        val locationManager = getSystemService(android.content.Context.LOCATION_SERVICE) as android.location.LocationManager
+        locationListener?.let {
+            try {
+                locationManager.removeUpdates(it)
+            } catch (e: SecurityException) {
+                android.util.Log.e("ListDetailActivity", "Error removing location listener", e)
+            }
         }
     }
 }

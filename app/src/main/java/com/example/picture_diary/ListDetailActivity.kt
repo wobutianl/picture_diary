@@ -27,6 +27,10 @@ class ListDetailActivity : AppCompatActivity() {
     private lateinit var binding: ActivityListDetailBinding
     private val REQUEST_IMAGE_CAPTURE = 1
     private val REQUEST_PICK_IMAGE = 2
+    private val REQUEST_CAMERA_PERMISSION = 3
+    private val REQUEST_STORAGE_PERMISSION = 4
+    private val REQUEST_LOCATION_PERMISSION = 5
+    
     private val photoList = mutableListOf<DatabaseHelper.PhotoData>()
     private lateinit var photoAdapter: PhotoAdapter
     private lateinit var dbHelper: DatabaseHelper
@@ -179,6 +183,14 @@ class ListDetailActivity : AppCompatActivity() {
     }
 
     private fun dispatchTakePictureIntent() {
+        // 检查相机权限
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            if (checkSelfPermission(android.Manifest.permission.CAMERA) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(android.Manifest.permission.CAMERA), REQUEST_CAMERA_PERMISSION)
+                return
+            }
+        }
+
         // 先检查位置权限并获取位置
         checkLocationPermission()
         
@@ -735,8 +747,6 @@ class ListDetailActivity : AppCompatActivity() {
         return true
     }
 
-    private val REQUEST_STORAGE_PERMISSION = 1
-    private val REQUEST_LOCATION_PERMISSION = 2
     private var currentLocation: android.location.Location? = null
     private var currentLocationAddress: String? = null
     private var locationListener: android.location.LocationListener? = null
@@ -1155,6 +1165,13 @@ class ListDetailActivity : AppCompatActivity() {
                     getCurrentLocation()
                 } else {
                     Toast.makeText(this, "Location permission is required to get location", Toast.LENGTH_SHORT).show()
+                }
+            }
+            REQUEST_CAMERA_PERMISSION -> {
+                if (grantResults.isNotEmpty() && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                    dispatchTakePictureIntent()
+                } else {
+                    Toast.makeText(this, "Camera permission is required to take photos", Toast.LENGTH_SHORT).show()
                 }
             }
         }

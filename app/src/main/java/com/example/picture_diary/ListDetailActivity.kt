@@ -653,7 +653,7 @@ class ListDetailActivity : AppCompatActivity() {
                 // 显示确认对话框
                 val confirmBuilder = android.app.AlertDialog.Builder(this)
                 confirmBuilder.setTitle("确认导出")
-                confirmBuilder.setMessage("确定要导出当前列表的所有照片和信息为PDF文件吗？")
+                confirmBuilder.setMessage("确定要导出当前列表的所有照片 and 信息为PDF文件吗？")
                 confirmBuilder.setPositiveButton("确定") { _, _ ->
                     generatePdf()
                 }
@@ -980,18 +980,20 @@ class ListDetailActivity : AppCompatActivity() {
 
     // 获取 PDF 文件路径
     private fun getPdfFilePath(): String {
-        // 使用应用专用的存储目录，避免权限问题
-        val directory = getExternalFilesDir(android.os.Environment.DIRECTORY_DOCUMENTS)
-        val pictureDiaryDir = java.io.File(directory, "PictureDiary")
+        // 获取系统的下载目录
+        val downloadDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+        val pictureDiaryDir = java.io.File(downloadDir, "PictureDiary")
+        
         // 确保目录存在
         if (!pictureDiaryDir.exists()) {
             val created = pictureDiaryDir.mkdirs()
             android.util.Log.d("ListDetailActivity", "Created directory: $created, path: ${pictureDiaryDir.absolutePath}")
         }
+        
         val currentYear = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
         val listName = intent.getStringExtra("LIST_NAME") ?: "Unknown List"
         val fileName = "${currentYear}_${listName.replace(" ", "_")}.pdf"
-        val pdfPath = "${pictureDiaryDir.absolutePath}/$fileName"
+        val pdfPath = java.io.File(pictureDiaryDir, fileName).absolutePath
         android.util.Log.d("ListDetailActivity", "PDF path: $pdfPath")
         return pdfPath
     }

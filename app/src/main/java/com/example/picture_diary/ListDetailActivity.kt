@@ -212,8 +212,14 @@ class ListDetailActivity : AppCompatActivity() {
     private fun openGallery() {
         // 检查存储权限
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-            if (checkSelfPermission(android.Manifest.permission.READ_EXTERNAL_STORAGE) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                requestPermissions(arrayOf(android.Manifest.permission.READ_EXTERNAL_STORAGE), REQUEST_STORAGE_PERMISSION)
+            val permissions = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                arrayOf(android.Manifest.permission.READ_MEDIA_IMAGES)
+            } else {
+                arrayOf(android.Manifest.permission.READ_EXTERNAL_STORAGE)
+            }
+            
+            if (permissions.any { checkSelfPermission(it) != android.content.pm.PackageManager.PERMISSION_GRANTED }) {
+                requestPermissions(permissions, REQUEST_STORAGE_PERMISSION)
                 return
             }
         }
@@ -650,19 +656,49 @@ class ListDetailActivity : AppCompatActivity() {
                 true
             }
             R.id.action_settings -> {
-                // 显示确认对话框
-                val confirmBuilder = android.app.AlertDialog.Builder(this)
-                confirmBuilder.setTitle("确认导出")
-                confirmBuilder.setMessage("确定要导出当前列表的所有照片 and 信息为PDF文件吗？")
-                confirmBuilder.setPositiveButton("确定") { _, _ ->
-                    generatePdf()
-                }
-                confirmBuilder.setNegativeButton("取消", null)
-                confirmBuilder.show()
+                // 检查存储权限（针对导出PDF）
+                checkStoragePermissionAndExport()
                 true
             }
             else -> super.onOptionsItemSelected(item)
         }
+    }
+
+    private fun checkStoragePermissionAndExport() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            // 对于 Android 13 (API 33) 及以上，导出到公共目录不需要额外权限
+            // 但如果需要读取图片，可能需要 READ_MEDIA_IMAGES
+            // 这里我们主要处理 Android 12 (API 31/32) 及以下的导出权限
+            
+            if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU) {
+                if (checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                    // 显示解释对话框（基于 Android 12 的最佳实践）
+                    val builder = android.app.AlertDialog.Builder(this)
+                    builder.setTitle("需要存储权限")
+                    builder.setMessage("导出 PDF 需要存储权限以保存文件到下载目录。")
+                    builder.setPositiveButton("去授权") { _, _ ->
+                        requestPermissions(arrayOf(android.Manifest.permission.WRITE_EXTERNAL_STORAGE), REQUEST_STORAGE_PERMISSION)
+                    }
+                    builder.setNegativeButton("取消", null)
+                    builder.show()
+                    return
+                }
+            }
+        }
+        
+        // 显示确认导出对话框
+        showExportConfirmDialog()
+    }
+
+    private fun showExportConfirmDialog() {
+        val confirmBuilder = android.app.AlertDialog.Builder(this)
+        confirmBuilder.setTitle("确认导出")
+        confirmBuilder.setMessage("确定要导出当前列表的所有照片 and 信息为PDF文件吗？")
+        confirmBuilder.setPositiveButton("确定") { _, _ ->
+            generatePdf()
+        }
+        confirmBuilder.setNegativeButton("取消", null)
+        confirmBuilder.show()
     }
 
     // 加载照片数据
@@ -903,7 +939,7 @@ class ListDetailActivity : AppCompatActivity() {
                             val minImageHeight = 100f
                             val safeImageHeight = if (imageAvailableHeight > minImageHeight) imageAvailableHeight else minImageHeight
                             
-                            // 加载原始图片用于PDF生成
+                            // 加劳原始图片用于PDF生成
                             val originalBitmap = android.graphics.BitmapFactory.decodeFile(photoData.imagePath)
                             // 调整图片大小
                             val imageData = ImageDataFactory.create(bitmapToByteArray(originalBitmap))
@@ -1106,17 +1142,12 @@ class ListDetailActivity : AppCompatActivity() {
         when (requestCode) {
             REQUEST_STORAGE_PERMISSION -> {
                 if (grantResults.isNotEmpty() && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                    // 权限已授予，检查是否是从打开相册请求的权限
-                    if (permissions.contains(android.Manifest.permission.READ_EXTERNAL_STORAGE)) {
-                        // 重新打开相册
-                        openGallery()
-                    } else {
-                        // 继续生成PDF
-                        Toast.makeText(this, "存储权限已授予", Toast.LENGTH_SHORT).show()
-                        generatePdf()
-                    }
+                    // 权限已授予
+                    Toast.makeText(this, "存储权限已授予", Toast.LENGTH_SHORT).show()
+                    // 检查是否在导出流程中
+                    showExportConfirmDialog()
                 } else {
-                    Toast.makeText(this, "需要存储权限才能保存照片、生成PDF或选择图片", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "需要存储权限才能导出 PDF 或选择图片", Toast.LENGTH_SHORT).show()
                 }
             }
             REQUEST_LOCATION_PERMISSION -> {
